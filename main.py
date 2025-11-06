@@ -18,6 +18,13 @@ def skan(channel, tgi_f='', debers='debers00008'):
         time.sleep(0.05)
     print(x)
 
+def test_poprawnosci_polecenia(channel, tgi, debers):
+    """Po odpaleniu każdego skryptu sprawdzamy zmienną $?, czy ma wartość '1'"""
+    channel.send('echo $?\n')
+    zwrot = skan_zwrot(channel, tgi, debers)
+    lista = zwrot.split('\r\n')
+    print(lista)
+
 
 def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
     """Skan i zwrot z terminala. Liczniki są po to, żeby nie wysyłać po kilka razy komend"""
@@ -26,6 +33,7 @@ def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
     licznik_passwd = 0
     while True:
         y = channel.recv(9999).decode('utf-8')
+        print(y)
         string = string + y
         if string.count('{}@{}'.format(tgi, debers)) or string.count('bash-2.03$'):
             break
@@ -35,16 +43,19 @@ def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
                 channel.send('\n'.encode())
                 licznik += 1
         if haslo != '':
-            if string.count("rbcprod1's password:") == 1 and licznik_passwd == 0:
+            if string.count("password:") == 1 and licznik_passwd == 0:
                 time.sleep(0.1)
                 channel.send(f'{haslo}\n')
                 licznik_passwd += 1
-            elif string.count("rbcprod1's password:") == 2 and licznik == 1:
+            elif string.count("password:") == 2 and licznik_passwd == 1:
+                time.sleep(0.1)
+                channel.send(f'{haslo}\n')
+                licznik_passwd += 1
+            elif string.count("password:") == 3 and licznik_passwd == 2:
                 time.sleep(0.1)
                 channel.send(f'{haslo}\n')
                 licznik_passwd += 1
         time.sleep(0.05)
-    print(string)
     return string
 
 
@@ -96,7 +107,7 @@ def katalog_wybor():
         if not sciezka:
             sys.exit()
         lista = os.listdir(sciezka)
-        if sciezka.count('rbc/01/config'):
+        if sciezka.count('00_ctc/rbc/01/config'):
             break
         else:
             input('Wybrany katalog nie zawiera ścieżki /rbc/01/config. Naciśnij coś żeby wybrać jeszcze raz')
@@ -201,30 +212,110 @@ def create_cd(conn, channel, login, haslo='', debers=''):
         _ = input("Coś poszło nie tak z ")
         zamykanie_polaczenia(conn, channel)
 
-    lista_zwrot = zwrot.split('\n')[-10:-1]
-    print(lista_zwrot)
+    lista_zwrot = zwrot.split('\r\n')
+    return lista_zwrot[-4].strip()
 
+def import_danych_do_cc(channel, debers,  login,  linia, etykieta, preview):
+    """Importowanie wszystkich danych do CC"""
+    channel.send('cd /cc/l905/customer/poland \n'.encode())
+    skan(channel, login, debers)
+    zwrot = ''
+    if preview:
+        channel.send(f"clearfsimport -nsetevent -recurse -preview /home/{login}/project_data/poland/{linia} .\n".encode())
+        skan_zwrot(channel, login, debers)
+        return zwrot
+    else:
+        channel.send(
+            f"clearfsimport -nsetevent -recurse -mklabel {etykieta} /home/{login}/project_data/poland/{linia} .\n".encode())
+        skan_zwrot(channel, login, debers)
+        return None
 
 def zamykanie_polaczenia(conn, channel):
     """Zamykamy połączenie z hostem"""
     conn.close()
     channel.close()
 
+def etykieta_cc(katalog, przelacznik = True):
+    """Określanie etykiety do CC"""
+    while True:
+        if przelacznik:
+            decyzja = input(f"Czy {katalog} ma być też etykietą którą zostaną zaetykietowane pliki?[T/N]: ").upper()
+        else:
+            decyzja = 'N'
+        if decyzja == 'T':
+            zwrot = katalog
+            break
+        elif decyzja == 'N':
+            while True:
+                etykieta = input("Podaj etykietę: ")
+                potw = input(f"Etykieta to {etykieta}, zgadza się?[T/N]: ").upper()
+                if potw == 'T':
+                    zwrot = etykieta
+                    break
+            break
+    return zwrot
+
+def linia_cc(linia, przelacznik = True):
+    """Określanie katalogu linii do CC"""
+    while True:
+        if przelacznik:
+            decyzja = input(f"Czy {linia} to katalog linii do importu plików do CC?[T/N]: ").upper()
+        else:
+            decyzja = 'N'
+
+        if decyzja == 'T':
+            zwrot = linia
+            break
+        elif decyzja == 'N':
+            while True:
+                linia_zwrot = input("Podaj katalog linii: ")
+                potw = input(f"Katalog linii to {linia_zwrot}, zgadza się?[T/N]: ").upper()
+                if potw == 'T':
+                    zwrot = linia_zwrot
+                    break
+            break
+    return zwrot
+
+def weryfikacja_etykiety(channel, etykieta, login):
+    channel.send('cd /cc/l905/customer/poland\n'.encode())
+    skan_zwrot(channel, login, 'debers00008')
+    channel.send(f'ct mklbtype -nc {etykieta}\n'.encode())
+    zwrot = skan_zwrot(channel, login, 'debers00008')
+
+    if zwrot.count('already exists'):
+        return False
+    else:
+        return True
+
+
+def weryfikacja_linii(channel, linia, login):
+    channel.send(f'cd /cc/l905/customer/poland/{linia}\n'.encode())
+    zwrot = skan_zwrot(channel, login, 'debers00008')
+
+    if zwrot.count('No such file or directory'):
+        return False
+    else:
+        return True
+
 
 if __name__ == '__main__':
     rbc_prod = '10.220.30.208'
     debersuxvl03 = '10.220.181.133'
-    # debers051 = '10.220.30.91'
+    debersuxv045 = '10.220.30.245'
+    debers00008 = '10.220.30.24'
     # debers058 = '10.220.30.98'
     # debers794 = '10.48.71.44'
 
     lista_plikow_rbc, sciezka_do_katalog_rbc = katalog_wybor()
+
+    linia_main = sciezka_do_katalog_rbc.split("/")[-5]
 
     if not sprawdzanie_zawartosci_rbc(lista_plikow_rbc):
         _ = input('Brakuję plików w katalogu rbc/config albo został wybrany zły katalog')
         sys.exit()
 
     login_main = input('\nPodaj login: ')
+    login_abbbr = login_main.split('_')[0]
     haslo_main = getpass.getpass(prompt='Podaj haslo: ')
 
     # Zaczynamy od połączenia do rbc_prod
@@ -251,4 +342,50 @@ if __name__ == '__main__':
                                                                     login_main, haslo_main, debers='debersuxvl03')
     print(f"Ok, połączono z debersuxvl03")
 
-    create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
+    folder_obraz_rbc = create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
+    test_poprawnosci_polecenia(debersuxvl03_channel, login_main, 'debersuxvl03')
+
+    _ = input("Przerwa")
+
+    zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
+
+    #Łączenie z debers0008
+    debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbbr, haslo_main)
+
+    # Przechodzimy do katalogu poland
+    channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
+    skan(channel_debers_08, login_abbbr, 'debers00008')
+
+    etykieta_main = etykieta_cc(katalog_rbc)
+    while True:
+        poprawne_etykieta = weryfikacja_etykiety(channel_debers_08, etykieta_main, login_abbbr)
+        if poprawne_etykieta:
+            break
+        else:
+            print(f'Etykieta {etykieta_main} istnieje podaj jeszcze raz')
+            etykieta_main = etykieta_cc(linia_main, przelacznik=False)
+
+    katalog_linii = linia_cc(linia_main)
+    while True:
+        poprawne = weryfikacja_linii(channel_debers_08, katalog_linii, login_abbbr)
+        if poprawne:
+            break
+        else:
+            print(f'Podany katalog {katalog_linii} istnieje podaj jeszcze raz')
+            etykieta_main = linia_cc(linia_main, przelacznik=False)
+
+    #TODO Sprawdzanie czy pliki są w odpwoednich katalogach
+    #TODO, jeśli nie są to przesuwamy
+    #TODO Wrzucanie SFTP
+
+    print("Preview importu plików...")
+    zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbbr,
+                                       katalog_linii, etykieta_main, True)
+
+    #TODO sprawdzanie czy są pliki oznaczone jako new element
+
+    """zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_main.split('_')[0],
+                                       katalog_linii, etykieta_main, False)"""
+
+    #TODO Tworzenie obrazu his rbc
+    #TODO import obrazow
