@@ -100,99 +100,159 @@ def wrzucanie_plikow(conn, tgi, lista, katalog_, sciezka):
             sftp.put(path, remothe_path)
 
 
+def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
+    remote_path = f"/home/{tgi}/project_data/poland"
+    #katalog = sciezka.split(os.path.sep)[-1]
+
+    sftp = conn.open_sftp()
+    try:
+        katalog_linia = sciezka.split('poland/')[1]
+    except IndexError:
+        _ = input('Nie znaleziono katalogu poland. Naciśnij coś żeby wyjść.')
+        sys.exit()
+    try:
+        sftp.mkdir(remote_path + '/' + katalog_linia)
+    except OSError:
+        _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. Naciśnij coś żeby wyjść.')
+    print(f"Presyłanie plików do /home/{tgi}/project_data/poland/...")
+
+    with sftp:
+        for (sci, katalogi, pliki) in os.walk(sciezka):
+
+            if katalogi:
+                for katalog in katalogi:
+                    path_cc = remote_path + '/' +  sci.split('poland/')[1]
+                    path = f'{path_cc}/{katalog}'
+                    path = path.replace('\\', '/')
+                    print(f'Tworzymy katalog {path}')
+                    try:
+                        sftp.mkdir(path)
+                    except OSError:
+                        _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. '
+                                  f'Naciśnij coś żeby wyjść.')
+
+            if pliki:
+                for plik in pliki:
+                    try:
+                        remote_path_cc = '/'.join([remote_path, sci.split('poland/')[1].replace('\\', '/'), plik])
+                    except IndexError:
+                        print('Wybrana ścieżka nie zawiera katalogu poland')
+                        _ = input('Naciśnij coś żeby wyjść.')
+                        sys.exit()
+                    sci_do_pliku = '/'.join([sci, plik])
+                    print(sci_do_pliku, remote_path_cc)
+                    sftp.put(sci_do_pliku, remote_path_cc)
+
+def spr_sciezek(sciezka: str, kontynuacja: str, licznik : int) -> int:
+    lista : list = kontynuacja.split("/")
+
+    try:
+        zwrot: list = os.listdir(os.path.join(sciezka, *lista))
+        if len(zwrot) == 0:
+            licznik += 1
+            print(f'Brak plików w scieżce {kontynuacja}')
+    except FileNotFoundError:
+        licznik += 1
+        print(f"Brak katalogu {kontynuacja}")
+
+    return licznik
+
+
 def katalog_wybor():
     """Określanie ścieżki i sprawdzanie struktury katalogów"""
-    while True:
-        sciezka_init = filedialog.askdirectory(title='Wybór katalogu linii dla danego projektu')
-        licznik = 0
-        lista_stacji = []
-        # Sprawdzanie poprawności struktury plików
-        for (sciezka, katalogi, pliki) in os.walk(sciezka_init):
-            #print(sciezka)
-            if sciezka.count('.doc') and katalogi and pliki:
-                for x in pliki:
-                    if x.endswith(".pdf"):
-                        print("W katalogu .doc są pliki .pdf, do poprawy.")
+    sciezka_init = filedialog.askdirectory(title='Wybór katalogu linii dla danego projektu')
+    print(sciezka_init)
+    if not sciezka_init:
+        sys.exit()
+    licznik = 0
+    licznik = spr_sciezek(sciezka_init, '/00_ctc/rbc/01/config', licznik)
+    licznik = spr_sciezek(sciezka_init, '/00_ctc/his_rbc', licznik)
+
+    # Sprawdzanie poprawności struktury plików
+    for (sciezka, katalogi, pliki) in os.walk(sciezka_init):
+        #print(sciezka)
+        if sciezka.count('.doc') and katalogi and pliki:
+            for x in pliki:
+                if x.endswith(".pdf"):
+                    print("W katalogu .doc są pliki .pdf, do poprawy.")
+                    licznik += 1
+
+        if sciezka.count(".dmt") and pliki:
+            ilosc = len(pliki)
+            if ilosc > 1:
+                print("W katalogu 00_ctc/.dmt jest więcej niż jeden plik, do poprawy.")
+                licznik += 1
+            elif ilosc == 0:
+                print("Brak plików w katalogu 00_ctc/.dmt, do poprawy.")
+                licznik += 1
+            elif ilosc == 1:
+                if pliki[0].endswith('.7z') or pliki[0].endswith('.mdb'):
+                    print("Złe rozszerzenie pliku bazodanowego. Jest 7z, powinno być zip.")
+
+        if sciezka.count(r'\00_ctc\rbc\01\config'):
+            if len(pliki) != 8:
+                print("W katalogu rbc/01/config powinno być 8 plików, do poprawy")
+                licznik += 1
+            elif len(pliki) == 8:
+                lista_potrzebnych = ['AURData.xml', 'Coor_STR.xml', 'Location', 'STR.xml', 'SafeLocationData.xml',
+                                     'data.md5', 'hosts', 'ocs.specific.conf']
+                lista_przycietych = [x.split('@')[1] for x in pliki]
+                for plik in lista_potrzebnych:
+                    if plik not in lista_przycietych:
+                        print(f"W katalogu rbc brakuje pliku {plik}, do poprawy.")
                         licznik += 1
-            if sciezka.count(".dmt") and pliki:
-                ilosc = len(pliki)
-                if ilosc > 1:
-                    print("W katalogu 00_ctc/.dmt jest więcej niż jeden plik, do poprawy.")
-                    licznik += 1
-                elif ilosc == 0:
-                    print("Brak plików w katalogu 00_ctc/.dmt, do poprawy.")
-                    licznik += 1
-                elif ilosc == 1:
-                    if pliki[0].endswith('.7z'):
-                        print("Złe rozszerzenie pliku bazodanowego. Jest 7z, powinno być zip.")
 
-            if sciezka.count(r'\00_ctc\rbc\01\config'):
-                if len(pliki) != 8:
-                    print("W katalogu rbc/01/config powinno być 8 plików, do poprawy")
-                    licznik += 1
-                elif len(pliki) == 8:
-                    lista_potrzebnych = ['AURData.xml', 'Coor_STR.xml', 'Location', 'STR.xml', 'SafeLocationData.xml',
-                                         'data.md5', 'hosts', 'ocs.specific.conf']
-                    lista_przycietych = [x.split('@')[1] for x in pliki]
-                    for plik in lista_potrzebnych:
-                        if plik not in lista_przycietych:
-                            print(f"W katalogu rbc brakuje pliku {plik}, do poprawy.")
-                            licznik += 1
+        if sciezka.count(r'\00_ctc\his_rbc') and pliki and katalogi:
+            lista_opr = [x for x in katalogi if x.count("opr")]
+            if len(lista_opr) == 0:
+                print("Brak katalogów opr")
+            elif len(lista_opr) > 1:
+                katalog_opr = os.path.join(sciezka, lista_opr[0], 'config')
+                zawartosc_pliku = os.listdir(katalog_opr)
+                plik_models = [x for x in zawartosc_pliku if x.count('models')]
+                sciezka_do_models = os.path.join(katalog_opr, plik_models[0])
+                with open(sciezka_do_models, 'r') as f:
+                    lista_models = list(f)
+                lista_stacji = []
+                for linia in lista_models:
+                    if linia.count("<model>"):
+                        stacja = linia.split("\\")[0].replace(" <model>", "")
+                        if stacja not in lista_stacji and stacja != '00_ctc':
+                            lista_stacji.append(stacja)
 
-            if sciezka.count(r'\00_ctc\his_rbc') and pliki and katalogi:
-                lista_opr = [x for x in katalogi if x.count("opr")]
-                if len(lista_opr) == 0:
-                    print("Brak katalogów opr")
-                elif len(lista_opr) > 1:
-                    katalog_opr = os.path.join(sciezka, lista_opr[0], 'config')
-                    zawartosc_pliku = os.listdir(katalog_opr)
-                    plik_models = [x for x in zawartosc_pliku if x.count('models')]
-                    sciezka_do_models = os.path.join(katalog_opr, plik_models[0])
-                    with open(sciezka_do_models, 'r') as f:
-                        lista_models = list(f)
-                    lista_stacji = []
-                    for linia in lista_models:
-                        if linia.count("<model>"):
-                            stacja = linia.split("\\")[0].replace(" <model>", "")
-                            if stacja not in lista_stacji and stacja != '00_ctc':
-                                lista_stacji.append(stacja)
-
-                    for stacja in lista_stacji:
-                        try:
-                            zwrot = os.listdir(os.path.join(sciezka_init, stacja))
-                            if len(zwrot) != 2:
-                                print(f"Brak katalogów w {stacja}, do poprawy.")
-                            elif len(zwrot) == 2:
-                                try:
-                                    zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'his_rbc'))
-                                    if len(zwrot) != 2:
-                                        print(f'Brak katalogów w {stacja}/his_rbc, do poprawy.')
-                                        licznik += 1
-                                except FileNotFoundError:
-                                    print(f"Brak katalogu {stacja}/his_rbc")
+                for stacja in lista_stacji:
+                    try:
+                        zwrot = os.listdir(os.path.join(sciezka_init, stacja))
+                        if len(zwrot) != 2:
+                            print(f"Brak katalogów w {stacja}, do poprawy.")
+                        elif len(zwrot) == 2:
+                            try:
+                                zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'his_rbc'))
+                                if len(zwrot) != 2:
+                                    print(f'Brak katalogów w {stacja}/his_rbc, do poprawy.')
                                     licznik += 1
+                            except FileNotFoundError:
+                                print(f"Brak katalogu {stacja}/his_rbc")
+                                licznik += 1
 
-                                try:
-                                    zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'im/01/config'))
-                                    if len(zwrot) != 1:
-                                        print(f'Brak pliku elem.dat w {stacja}/im/01/config, do poprawy.')
-                                        licznik += 1
-                                except FileNotFoundError:
-                                    print(f"Brak katalogu {stacja}/im/01/config")
+                            try:
+                                zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'im/01/config'))
+                                if len(zwrot) != 1:
+                                    print(f'Brak pliku elem.dat w {stacja}/im/01/config, do poprawy.')
                                     licznik += 1
+                            except FileNotFoundError:
+                                print(f"Brak katalogu {stacja}/im/01/config")
+                                licznik += 1
 
-                        except FileNotFoundError:
-                            print(f"Brak katalogu stacyjnego {stacja}, do poprawy.")
-                            licznik += 1
+                    except FileNotFoundError:
+                        print(f"Brak katalogu stacyjnego {stacja}, do poprawy.")
+                        licznik += 1
 
+    if licznik > 0:
+        input("Są rzeczy do poprawy. Naciśnij coś żeby wyjść i poprawić.")
+        sys.exit()
 
-
-        if licznik > 0:
-            input("Są rzeczy do poprawy. Naciśnij coś żeby wyjść i poprawić.")
-            sys.exit()
-
-        break
-
+    return sciezka_init
 
 
 def sprawdzanie_zawartosci_rbc(lista):
@@ -383,18 +443,21 @@ if __name__ == '__main__':
     # debers058 = '10.220.30.98'
     # debers794 = '10.48.71.44'
 
-    lista_plikow_rbc, sciezka_do_katalog_rbc = katalog_wybor()
+    sciezka_main = katalog_wybor()
 
-    """linia_main = sciezka_do_katalog_rbc.split("/")[-5]
-
+    linia_main = sciezka_main.split("/")[-1]
+    
     login_main = input('\nPodaj login do produkcji obrazu rbc: ')
-    login_abbbr = login_main.split('_')[0]
+    login_abbr = login_main.split('_')[0]
     haslo_main = getpass.getpass(prompt='Podaj haslo: ')
+    
+    debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
-    debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbbr, haslo_main)
+    #debers_08_conn = ''
+    #login_abbr = 'T0124446'
+    wrzucanie_plikow_do_cc(debers_08_conn, login_abbr, sciezka_main)
 
-    #weryfikacja_plikow_na_home(channel, login_abbbr, katalog)
-
+    """
     # Przechodzimy do katalogu poland
     channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
     skan(channel_debers_08, login_abbbr, 'debers00008')
