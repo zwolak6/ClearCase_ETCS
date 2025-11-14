@@ -90,6 +90,8 @@ def nawiazanie_polaczenia(ip, user, passw, debers=''):
 
 def wrzucanie_plikow(conn, tgi, lista, katalog_, sciezka):
     """Wrzucanie plikow z katalogu rbc do katalogu nowo utworzonego, usuwanie przedrostków przed @"""
+
+    sciezka = "/".join([sciezka, '00_ctc/rbc/01/config'])
     print(f"Presyłanie plików RBC...")
     with conn.open_sftp() as sftp:
         for plik in lista:
@@ -101,10 +103,11 @@ def wrzucanie_plikow(conn, tgi, lista, katalog_, sciezka):
 
 
 def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
-    remote_path = f"/home/{tgi}/project_data/poland"
-    #katalog = sciezka.split(os.path.sep)[-1]
+    """Wrzucamy przez sftp pliki na serwer debers00008"""
 
+    remote_path = f"/home/{tgi}/project_data/poland"
     sftp = conn.open_sftp()
+
     try:
         katalog_linia = sciezka.split('poland/')[1]
     except IndexError:
@@ -114,6 +117,7 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
         sftp.mkdir(remote_path + '/' + katalog_linia)
     except OSError:
         _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. Naciśnij coś żeby wyjść.')
+
     print(f"Presyłanie plików do /home/{tgi}/project_data/poland/...")
 
     with sftp:
@@ -124,11 +128,19 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
                     path_cc = remote_path + '/' +  sci.split('poland/')[1]
                     path = f'{path_cc}/{katalog}'
                     path = path.replace('\\', '/')
-                    print(f'Tworzymy katalog {path}')
+
                     try:
                         sftp.mkdir(path)
                     except OSError:
                         _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. '
+                                  f'Naciśnij coś żeby wyjść.')
+
+                if sci.endswith('00_ctc/rbc/01') or sci.endswith('00_ctc/his_rbc'):
+                    katalog_image = '/'.join([path, 'image'])
+                    try:
+                        sftp.mkdir(katalog_image)
+                    except OSError:
+                        _ = input(f'Katalog {katalog_image} już istnieje lub nie udało się go stworzyć. '
                                   f'Naciśnij coś żeby wyjść.')
 
             if pliki:
@@ -139,9 +151,11 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
                         print('Wybrana ścieżka nie zawiera katalogu poland')
                         _ = input('Naciśnij coś żeby wyjść.')
                         sys.exit()
+                    print(f"Wrzucam {plik}")
                     sci_do_pliku = '/'.join([sci, plik])
-                    print(sci_do_pliku, remote_path_cc)
                     sftp.put(sci_do_pliku, remote_path_cc)
+
+
 
 def spr_sciezek(sciezka: str, kontynuacja: str, licznik : int) -> int:
     lista : list = kontynuacja.split("/")
@@ -161,7 +175,7 @@ def spr_sciezek(sciezka: str, kontynuacja: str, licznik : int) -> int:
 def katalog_wybor():
     """Określanie ścieżki i sprawdzanie struktury katalogów"""
     sciezka_init = filedialog.askdirectory(title='Wybór katalogu linii dla danego projektu')
-    print(sciezka_init)
+
     if not sciezka_init:
         sys.exit()
     licznik = 0
@@ -253,6 +267,12 @@ def katalog_wybor():
         sys.exit()
 
     return sciezka_init
+
+def pliki_rbc(sciezka : str) -> list:
+    sciezka = '/'.join([sciezka, '00_ctc/rbc/01/config'])
+    lista = os.listdir(sciezka)
+
+    return lista
 
 
 def sprawdzanie_zawartosci_rbc(lista):
@@ -431,8 +451,29 @@ def weryfikacja_linii(channel, linia, login):
     else:
         return True
 
-def weryfikacja_plikow_na_home():
-    pass
+def sprawdzanie_import_preview(zwrot : str, conn, channel):
+    lista = zwrot.split('\r\n')
+    lista_element = []
+    for l in lista:
+        if l.count(' element'):
+            lista_element.append(l)
+
+    if len(lista_element) != 0:
+        print("Lista nowych plików:")
+        for elem in lista:
+            print(elem)
+
+        while True:
+            zwrotka = input("Czy tak ma być?[T/N]: ").upper()
+            if zwrotka == 'T':
+                break
+            elif zwrotka == 'N':
+                _ = input("To do poprawy. Naciśnij coś żeby wyjść.")
+                zamykanie_polaczenia(conn, channel)
+                sys.exit()
+            else:
+                print("Błędny wybór, powinno być T lub N.")
+
 
 
 if __name__ == '__main__':
@@ -445,68 +486,68 @@ if __name__ == '__main__':
 
     sciezka_main = katalog_wybor()
 
+    lista_plikow_rbc = pliki_rbc(sciezka_main)
+
     linia_main = sciezka_main.split("/")[-1]
     
     login_main = input('\nPodaj login do produkcji obrazu rbc: ')
     login_abbr = login_main.split('_')[0]
     haslo_main = getpass.getpass(prompt='Podaj haslo: ')
-    
+
+    print("Łączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
-    #debers_08_conn = ''
-    #login_abbr = 'T0124446'
+
+    #print(f"Wrzucanie plików do katalogu home/{login_abbr}/project_data/poland ...")
     wrzucanie_plikow_do_cc(debers_08_conn, login_abbr, sciezka_main)
 
-    """
     # Przechodzimy do katalogu poland
     channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
-    skan(channel_debers_08, login_abbbr, 'debers00008')
-    
-    weryfikacja_plikow_na_home(channel_debers_08, )
-    
+    skan(channel_debers_08, login_abbr, 'debers00008')
+
     
     # Określamy i sprawdzamy etykietę
     etykieta_main = etykieta_cc()
 
+    print("Sprawdzam etykietę ..")
     while True:
-        poprawne_etykieta = weryfikacja_etykiety(channel_debers_08, etykieta_main, login_abbbr)
+        poprawne_etykieta = weryfikacja_etykiety(channel_debers_08, etykieta_main, login_abbr)
         if poprawne_etykieta:
             break
         else:
             print(f'Etykieta {etykieta_main} istnieje podaj jeszcze raz')
-            etykieta_main = etykieta_cc(linia_main, przelacznik=False)
+            etykieta_main = etykieta_cc()
+
+    print(f"Sprawdzam, czy jest ścieżka z katalogiem linii {linia_main}")
 
     # Określamy i spr katalog linii
     katalog_linii = linia_cc(linia_main)
+
     while True:
-        poprawne = weryfikacja_linii(channel_debers_08, katalog_linii, login_abbbr)
+        poprawne = weryfikacja_linii(channel_debers_08, katalog_linii, login_abbr)
         if poprawne:
             break
         else:
             print(f'Podany katalog {katalog_linii} istnieje podaj jeszcze raz')
             etykieta_main = linia_cc(linia_main, przelacznik=False)
 
-    # TODO Sprawdzanie czy pliki są w odpwoednich katalogach
-    # TODO, jeśli nie są to przesuwamy
-    # TODO Wrzucanie SFTP
 
-    # TODO Spr czy są pliki image
-    # TODO spr czy sa
-    print("Preview importu plików...")
-    zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbbr,
+    print("Preview importu plików ...")
+    zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr,
                                                katalog_linii, etykieta_main, True)
 
-    # TODO sprawdzanie czy są pliki oznaczone jako new element
+    print("Sprawdzanie nowych elementów ...")
+    sprawdzanie_import_preview(zwrot_import_preview, debers_08_conn, channel_debers_08)
 
+    print("Importowanie i etykietowanie ...")
     zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_main.split('_')[0],
                                        katalog_linii, etykieta_main, False)
 
-    # TODO Tworzenie obrazu his rbc
-    # TODO import obrazow
+    print("Zamykanie połączenia do debers00008 ...")
+    zamykanie_polaczenia(debers_08_conn, channel_debers_08)
 
-    
 
-    # Zaczynamy od połączenia do rbc_prod
+    # Polaczenie do rbc prod
     print("Łączenie z hostem do produkcji obrazu RBC...")
     rbc_prod_conn, channel_rbc = nawiazanie_polaczenia(rbc_prod, login_main, haslo_main)
     print(f"Ok, połączono z {rbc_prod}")
@@ -514,8 +555,8 @@ if __name__ == '__main__':
     # Tworzymy katalog, jeśli już jest pytamy jeszcze raz
     katalog_rbc = katalog_roboczy(channel_rbc)
 
-    # Import plików rbc
-    wrzucanie_plikow(rbc_prod_conn, login_main, lista_plikow_rbc, katalog_rbc, sciezka_do_katalog_rbc)
+    # Import plików rbc do rbc_prod
+    wrzucanie_plikow(rbc_prod_conn, login_main, lista_plikow_rbc, katalog_rbc, sciezka_main)
 
     # Uruchamiamy skrypt initProdRepo
     init_prod_repo(rbc_prod_conn, channel_rbc, login_main, katalog_rbc)
@@ -533,8 +574,5 @@ if __name__ == '__main__':
     folder_obraz_rbc = create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
     test_poprawnosci_polecenia(debersuxvl03_channel, login_main, 'debersuxvl03')
 
-    _ = input("Przerwa")
-
     zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
 
-    #Łączenie z debers0008"""
