@@ -5,6 +5,7 @@ import getpass
 import os
 from paramiko.ssh_exception import AuthenticationException
 from tkinter import filedialog
+from datetime import datetime
 
 
 def skan(channel, tgi_f='', debers='debers00008'):
@@ -117,6 +118,7 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
         sftp.mkdir(remote_path + '/' + katalog_linia)
     except OSError:
         _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. Naciśnij coś żeby wyjść.')
+        sys.exit()
 
     print(f"Presyłanie plików do /home/{tgi}/project_data/poland/...")
 
@@ -377,7 +379,9 @@ def create_cd(conn, channel, login, haslo='', debers=''):
         zamykanie_polaczenia(conn, channel)
 
     lista_zwrot = zwrot.split('\r\n')
+    print(lista_zwrot[-4].strip())
     return lista_zwrot[-4].strip()
+
 
 def import_danych_do_cc(channel, debers,  login,  linia, etykieta, preview):
     """Importowanie wszystkich danych do CC"""
@@ -458,6 +462,8 @@ def sprawdzanie_import_preview(zwrot : str, conn, channel):
         if l.count(' element'):
             lista_element.append(l)
 
+    print(lista_element)
+    input("Czekam")
     if len(lista_element) != 0:
         print("Lista nowych plików:")
         for elem in lista:
@@ -474,6 +480,93 @@ def sprawdzanie_import_preview(zwrot : str, conn, channel):
             else:
                 print("Błędny wybór, powinno być T lub N.")
 
+
+def czyt_istniejacego_edcs(channel, tgi, debers):
+    """Czytamy isniejące rov dla potomności"""
+    channel.send('ct catcs\n')
+    zwrot = skan_zwrot(channel, tgi, debers)
+
+    lista = zwrot.split('\r\n')
+
+    print(lista)
+    return lista[1:-1]
+
+def zapisywanie_istniejacego_edcs(conn, tgi, lista):
+    """Zapisywanie rov dla potomności w katalogu roboczym"""
+    #TODO na później, zróbmy to bezpośrednio na CC
+    lista = [x + '\n' for x in lista]
+    with open('edcs_historia.txt', 'a', newline='') as f:
+
+        f.write('\n\n')
+        f.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+        f.write('\n')
+        f.writelines(lista)
+
+    with open('edcs_aktualny.txt', 'w', newline='') as f:
+        f.writelines(lista)
+
+    time.sleep(1)
+    remote = f'/home/{tgi}/temp/edcs_aktualny.txt'
+    print("Sciezka ", remote)
+    with conn.open_sftp() as sftp:
+        sftp.put('edcs_aktualny.txt', remote)
+
+def ustawianie_edcs_do_importu(channel, tgi, debers):
+    """Ustawiamy rov dla importu plików"""
+    #lista = ('element * CHECKEDOUT\n', 'element * /main/LATEST/')
+    nazwa_pliku = 'edcs_import.txt'
+    channel.send(f'echo "element * CHECKEDOUT" > /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    skan(channel, tgi, debers)
+    channel.send(f'echo "element * /main/LATEST/" >> /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    skan(channel, tgi, debers)
+    channel.send(f'ct setcs /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    skan(channel, tgi, debers)
+
+def ustawienie_oryginalnego_edcs(channel, tgi, debers):
+    channel.send(f'ct setcs /home/{tgi}/temp/edcs_aktualny.txt\n'.encode())
+    skan(channel, tgi, debers)
+
+def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
+    """Kopiowanie DataProd.pdf na temp w debers00008"""
+    channel.send('cd\n'.encode())
+    skan(channel)
+    channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/temp\n'.encode())
+    zwrot = skan_zwrot(channel, debers='XXX', haslo=haslo) # XXX bo dałem debers00008 jako default a to łapie za wcześnie, XXX jest fejkowe
+    if zwrot.count("No such file or directory"):
+        _ = input("Nie mogę znależć DataProd.pdf. Naciśnij coś żeby wyjść.")
+        zamykanie_polaczenia(conn, channel)
+        sys.exit()
+
+def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str):
+    """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/temp"""
+    channel.send(f'cd {folder_obraz_rbc}\n'.encode())
+    skan(channel, tgi, debers)
+    channel.send('ls -l\n'.encode())
+    zwrot = skan_zwrot(channel, tgi, debers)
+    lista = zwrot.split('\r\n')[2:-2]
+
+    lista_data_elem = [[x.split('\x1b[00m')[0].split(' ')[-3:-1], x.split('\x1b[00m')[1]] for x in lista]
+
+    lista_iso = [x[1] for x in lista_data_elem if (x[1].endswith('FCdump.iso') or x[1].endswith('OMS.iso')
+                                           or x[1].endswith('RBCAUR.iso'))]
+
+    if len(lista_iso) == 3:
+
+        while True:
+            channel.send(f'scp *.iso {tgi_abbr}@debers00008:/home/{tgi_abbr}/temp\n'.encode())
+            zwrot = skan_zwrot(channel, tgi, debers='debersuxvl03', haslo=haslo)
+
+            if zwrot.count('Quota') or zwrot.count('quota'):
+                _ = input(f"Brakuje miejsca na /home/{tgi_abbr}/temp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
+            elif zwrot.count('No such file or directory'):
+                _ = input(f'Nie ma obrazów w katalogu {folder_obraz_rbc}. Naciśnij coż żeby wyjść.')
+            else:
+                break
+
+    else:
+        _ = input('Obrazy .iso RBC nie wygenerowały się poprawnie. Naciśnij coś żeby wyjść')
+        zamykanie_polaczenia(conn, channel)
+        sys.exit()
 
 
 if __name__ == '__main__':
@@ -498,7 +591,7 @@ if __name__ == '__main__':
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
 
-    #print(f"Wrzucanie plików do katalogu home/{login_abbr}/project_data/poland ...")
+    print(f"Wrzucanie plików do katalogu home/{login_abbr}/project_data/poland ...")
     wrzucanie_plikow_do_cc(debers_08_conn, login_abbr, sciezka_main)
 
     # Przechodzimy do katalogu poland
@@ -531,21 +624,31 @@ if __name__ == '__main__':
             print(f'Podany katalog {katalog_linii} istnieje podaj jeszcze raz')
             etykieta_main = linia_cc(linia_main, przelacznik=False)
 
+    lista_istniejaca_edcs = czyt_istniejacego_edcs(channel_debers_08, login_abbr, 'debers00008')
+
+    zapisywanie_istniejacego_edcs(debers_08_conn, login_abbr, lista_istniejaca_edcs)
+
+    ustawianie_edcs_do_importu(channel_debers_08, login_abbr, 'debers00008')
+
+    input("Czekam")
+
+    #sys.exit()
 
     print("Preview importu plików ...")
     zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr,
                                                katalog_linii, etykieta_main, True)
 
+    # TODO sprawdzenie, czy to w ogóle działa
     print("Sprawdzanie nowych elementów ...")
     sprawdzanie_import_preview(zwrot_import_preview, debers_08_conn, channel_debers_08)
 
     print("Importowanie i etykietowanie ...")
-    zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_main.split('_')[0],
-                                       katalog_linii, etykieta_main, False)
+    #zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr, katalog_linii, etykieta_main, False)
+
+    ustawienie_oryginalnego_edcs(channel_debers_08, login_abbr, 'debers00008')
 
     print("Zamykanie połączenia do debers00008 ...")
     zamykanie_polaczenia(debers_08_conn, channel_debers_08)
-
 
     # Polaczenie do rbc prod
     print("Łączenie z hostem do produkcji obrazu RBC...")
@@ -564,6 +667,8 @@ if __name__ == '__main__':
     # Uruchamiamy skrypty configAll, collect.., pdf
     configure_all(rbc_prod_conn, channel_rbc)
 
+    kopiowanie_data_prod_pdf(rbc_prod_conn, channel_rbc, login_abbr, haslo_main)
+
     zamykanie_polaczenia(rbc_prod_conn, channel_rbc)
 
     print("Łączenie z hostem debersuxvl03...")
@@ -572,6 +677,10 @@ if __name__ == '__main__':
     print(f"Ok, połączono z debersuxvl03")
 
     folder_obraz_rbc = create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
+
+    print("Tutaj jesteś")
+    kopiowanie_rbc_iso(debersuxvl03_conn, debersuxvl03_channel, login_main, login_abbr,'debersuxvl03', haslo_main)
+
     test_poprawnosci_polecenia(debersuxvl03_channel, login_main, 'debersuxvl03')
 
     zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
