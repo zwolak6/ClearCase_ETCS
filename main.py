@@ -537,7 +537,7 @@ def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
         zamykanie_polaczenia(conn, channel)
         sys.exit()
 
-def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str):
+def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str, folder_obraz_rbc: str):
     """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/temp"""
     channel.send(f'cd {folder_obraz_rbc}\n'.encode())
     skan(channel, tgi, debers)
@@ -569,10 +569,53 @@ def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, hasl
         sys.exit()
 
 
+def edcs_his_rbc(linia, etykieta_sys, etykieta):
+    lista = ['element * CHECKEDOUT', '', '#================================================',
+             '# first see all root directories',
+             'element -directory /cc/lci/estw_l90_5                                   /main/LATEST',
+             'element -directory /cc/tas/tagopert                                     /main/LATEST',
+             '#================================================', '',
+             '#================================================', '# SCRIPTS',
+             'element -directory  /cc/lci/estw_l90_5/estw                             /main/LATEST',
+             'element -directory  /cc/lci/estw_l90_5/estw/common                      /main/LATEST',
+             'element -directory  /cc/lci/estw_l90_5/estw/common/tool                 /main/LATEST',
+             'element -directory  /cc/lci/estw_l90_5/estw/common/tool/scripts         /main/LATEST',
+             'element /cc/lci/estw_l90_5/estw/common/tool/scripts/...                 /main/LATEST',
+             '#================================================', '',
+             '#================================================', '# HIS Data PKP',
+             f'element -dir /cc/l905/customer/poland                                          {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}                                  {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}/00_ctc                           {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}/.doc                              -none',
+             f'element -dir /cc/l905/customer/poland/{linia}/00_ctc/his_rbc                   {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}/00_ctc/his_rbc/image              -none',
+             f'element /cc/l905/customer/poland/{linia}/his_rbc/...                           {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}/*                                {etykieta}',
+             f'element -dir /cc/l905/customer/poland/{linia}/*/his_rbc                        {etykieta}',
+             f'element /cc/l905/customer/poland/{linia}/*/his_rbc/...                         {etykieta}', '',
+             '#================================================', '# Diagnosis Catalogues Baseline PL 2.3.0.2',
+             f'element -dir /cc/l905/customer/poland/.diagnosis                        {etykieta_sys}',
+             f'element /cc/l905/customer/poland/.diagnosis/COMMON_Severities.xml       {etykieta_sys}',
+             f'element /cc/l905/customer/poland/.diagnosis/DiagCatHIS_RBC.xml          {etykieta_sys}',
+             f'element /cc/l905/customer/poland/.diagnosis/DiagCatRBC.xml              {etykieta_sys}',
+             'element /cc/l905/customer/poland/.diagnosis/...                         -none', '',
+             '#================================================', '# Target System',
+             'element -dir /cc/his_rbc/his_rbc                                                        /main/LATEST',
+             'element -dir /cc/his_rbc/his_rbc/icd_buildenv                                           /main/LATEST',
+             'element -dir /cc/his_rbc/his_rbc/icd_buildenv/rpmbuild                                  /main/LATEST',
+             'element -dir /cc/his_rbc/his_rbc/icd_buildenv/rpmbuild/SOURCES                          /main/pkp/LATEST',
+             'element /cc/his_rbc/his_rbc/icd_buildenv/rpmbuild/SOURCES/HIS_RBC_CAE_PKP_data.zip      /main/LATEST',
+             '#================================================', '', '#================================================',
+             '# UTILS', 'element /cc/tag/gnutil/...                                              IM_GNUTIL_02',
+             'element /cc/tag/mt/...                                                  MT_1.8.1',
+             '#================================================', '',
+             'element *                                                               -none']
+    return lista
+
 if __name__ == '__main__':
     rbc_prod = '10.220.30.208'
     debersuxvl03 = '10.220.181.133'
-    debersuxv045 = '10.220.30.245'
+    debersuxv045 = '10.220.30.245'  # obraz his_rbc
     debers00008 = '10.220.30.24'
     # debers058 = '10.220.30.98'
     # debers794 = '10.48.71.44'
@@ -586,7 +629,7 @@ if __name__ == '__main__':
     login_main = input('\nPodaj login do produkcji obrazu rbc: ')
     login_abbr = login_main.split('_')[0]
     haslo_main = getpass.getpass(prompt='Podaj haslo: ')
-
+    """
     print("Łączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
@@ -683,5 +726,15 @@ if __name__ == '__main__':
 
     test_poprawnosci_polecenia(debersuxvl03_channel, login_main, 'debersuxvl03')
 
-    zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
+    zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)"""
 
+    debers045_conn, debers045_channel = nawiazanie_polaczenia(debersuxv045, login_abbr, haslo_main, 'debersuxv045')
+
+    debers045_channel.send('ct setview his_rbc_cupl_copy_data\n'.encode('utf-8'))
+    skan(debers045_channel, login_abbr, 'debersuxv045')
+
+
+
+
+
+    zamykanie_polaczenia(debers045_conn, debers045_channel)
