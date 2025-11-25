@@ -29,15 +29,28 @@ def test_poprawnosci_polecenia(channel, tgi, debers):
 
 def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
     """Skan i zwrot z terminala. Liczniki są po to, żeby nie wysyłać po kilka razy komend"""
-    licznik = 0
     string = ''
+
+    licznik = 0
     licznik_passwd = 0
+    licznik_log = 0
+    licznik_prod = 0
+
     while True:
         y = channel.recv(9999).decode('utf-8')
         print(y)
         string = string + y
         if string.count('{}@{}'.format(tgi, debers)) or string.count('bash-2.03$'):
             break
+
+        if licznik_prod == 0 and  string.count('Y[=default]/N)'):
+            channel.send('\n'.encode())
+            licznik_prod += 1
+
+        if licznik_log == 0 and string.count('Y/N[=default])'):
+            channel.send('\n'.encode())
+            licznik_log += 1
+
         if ciag_znakow != '':
             if string.count(ciag_znakow) and licznik == 0:
                 time.sleep(0.1)
@@ -506,7 +519,7 @@ def zapisywanie_istniejacego_edcs(conn, tgi, lista):
         f.writelines(lista)
 
     time.sleep(1)
-    remote = f'/home/{tgi}/temp/edcs_aktualny.txt'
+    remote = f'/home/{tgi}/tmp/edcs_aktualny.txt'
     print("Sciezka ", remote)
     with conn.open_sftp() as sftp:
         sftp.put('edcs_aktualny.txt', remote)
@@ -515,22 +528,22 @@ def ustawianie_edcs_do_importu(channel, tgi, debers):
     """Ustawiamy rov dla importu plików"""
     #lista = ('element * CHECKEDOUT\n', 'element * /main/LATEST/')
     nazwa_pliku = 'edcs_import.txt'
-    channel.send(f'echo "element * CHECKEDOUT" > /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    channel.send(f'echo "element * CHECKEDOUT" > /home/{tgi}/tmp/{nazwa_pliku}\n'.encode())
     skan(channel, tgi, debers)
-    channel.send(f'echo "element * /main/LATEST/" >> /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    channel.send(f'echo "element * /main/LATEST/" >> /home/{tgi}/tmp/{nazwa_pliku}\n'.encode())
     skan(channel, tgi, debers)
-    channel.send(f'ct setcs /home/{tgi}/temp/{nazwa_pliku}\n'.encode())
+    channel.send(f'ct setcs /home/{tgi}/tmp/{nazwa_pliku}\n'.encode())
     skan(channel, tgi, debers)
 
 def ustawienie_oryginalnego_edcs(channel, tgi, debers):
-    channel.send(f'ct setcs /home/{tgi}/temp/edcs_aktualny.txt\n'.encode())
+    channel.send(f'ct setcs /home/{tgi}/tmp/edcs_aktualny.txt\n'.encode())
     skan(channel, tgi, debers)
 
 def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
-    """Kopiowanie DataProd.pdf na temp w debers00008"""
+    """Kopiowanie DataProd.pdf na tmp w debers00008"""
     channel.send('cd\n'.encode())
     skan(channel)
-    channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/temp\n'.encode())
+    channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/tmp\n'.encode())
     zwrot = skan_zwrot(channel, debers='XXX', haslo=haslo) # XXX bo dałem debers00008 jako default a to łapie za wcześnie, XXX jest fejkowe
     if zwrot.count("No such file or directory"):
         _ = input("Nie mogę znależć DataProd.pdf. Naciśnij coś żeby wyjść.")
@@ -538,7 +551,7 @@ def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
         sys.exit()
 
 def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str, folder_obraz_rbc: str):
-    """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/temp"""
+    """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/tmp"""
     channel.send(f'cd {folder_obraz_rbc}\n'.encode())
     skan(channel, tgi, debers)
     channel.send('ls -l\n'.encode())
@@ -553,13 +566,14 @@ def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, hasl
     if len(lista_iso) == 3:
 
         while True:
-            channel.send(f'scp *.iso {tgi_abbr}@debers00008:/home/{tgi_abbr}/temp\n'.encode())
+            channel.send(f'scp *.iso {tgi_abbr}@debers00008:/home/{tgi_abbr}/tmp\n'.encode())
             zwrot = skan_zwrot(channel, tgi, debers='debersuxvl03', haslo=haslo)
 
             if zwrot.count('Quota') or zwrot.count('quota'):
-                _ = input(f"Brakuje miejsca na /home/{tgi_abbr}/temp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
+                _ = input(f"Brakuje miejsca na /home/{tgi_abbr}/tmp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
             elif zwrot.count('No such file or directory'):
                 _ = input(f'Nie ma obrazów w katalogu {folder_obraz_rbc}. Naciśnij coż żeby wyjść.')
+                zamykanie_polaczenia(conn, channel)
             else:
                 break
 
@@ -610,7 +624,83 @@ def edcs_his_rbc(linia, etykieta_sys, etykieta):
              'element /cc/tag/mt/...                                                  MT_1.8.1',
              '#================================================', '',
              'element *                                                               -none']
+
     return lista
+
+def edcs_his_rbc_build(linia : str, etykieta_sys : str, etykieta : str)-> list[str]:
+
+    lista = ['element * CHECKEDOUT', f'element * {etykieta_sys}', '',
+             '#finaler Speicherplatz fuer das Image',
+             'element -dir /cc/l905/customer/poland                                                /main/LATEST',
+             f'element -dir /cc/l905/customer/poland/{linia}                                         /main/LATEST',
+             f'element -dir /cc/l905/customer/poland/{linia}/00_ctc                                     /main/LATEST',
+             f'element -dir /cc/l905/customer/poland/{linia}/00_ctc/his_rbc                             /main/LATEST',
+             f'element /cc/l905/customer/poland/{linia}/00_ctc/his_rbc/image/...                        /main/LATEST',
+             '', f'element * {etykieta}']
+
+    return lista
+
+def zapisywanie_edcs_his_rbc(channel, tgi, lista, nazwa):
+    """Wpisujemy do tmp/edcs_his_rbc"""
+    licznik = 1
+    for linia in lista:
+        if licznik == 1:
+            channel.send(f'echo "{linia}" > /home/{tgi}/tmp/{nazwa}\n'.encode())
+            skan(channel, tgi, 'debersuxv045')
+        else:
+            channel.send(f'echo "{linia}" >> /home/{tgi}/tmp/{nazwa}\n'.encode())
+            skan(channel, tgi, 'debersuxv045')
+        licznik += 1
+
+    channel.send(f'ct setcs /home/{tgi}/tmp/{nazwa}\n'.encode())
+
+def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
+    channel.send('/cc/lci/estw_l90_5/estw/common/tool/scripts/mkDataPackHISRBC.sh -c poland\n'.encode())
+    zwrot = skan_zwrot(channel, tgi, debers)
+
+    if zwrot.count('Exit this script'):
+        _ = input('Coś nie tak ze skryptem mkDataPackHISRBC. Naciśnij coś żeby zobaczyć loga i wyjść')
+        print(zwrot)
+        zamykanie_polaczenia(conn, channel)
+        sys.exit()
+
+    channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
+    skan(channel, tgi, debers)
+
+    channel.send(f'ct mklbtype -nc {etykieta}\n'.encode())
+    skan(channel, tgi, debers)
+
+    channel.send('ct ci -nc /cc/his_rbc/his_rbc/icd_buildenv/rpmbuild/SOURCES/HIS_RBC_CAE_PKP_data.zip\n'.encode())
+    skan(channel, tgi, debers)
+
+    channel.send(f'ct mklabel -nc {etykieta} /cc/his_rbc/his_rbc/icd_buildenv/rpmbuild/SOURCES/HIS_RBC_CAE_PKP_data.zip\n'.encode())
+    skan(channel, tgi, debers)
+
+def mk_inst_cd(conn, channel, tgi, debers, etykieta):
+    channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
+    skan(channel, tgi, debers)
+
+    channel.send(f'./mkInstCD.sh -l {etykieta}\n'.encode())
+    zwrot  = skan_zwrot(channel, tgi, debers)
+
+    if not zwrot.count('SUCC: all done'):
+        _ = input('Coś poszło nie tak z robieniem obrazu his_rbc .iso. Naciśnij coś, żeby zobaczyć loga i wyjść')
+        zamykanie_polaczenia(conn, channel)
+
+
+def kopiowanie_his_rbc(conn, channel, tgi, debers, etykieta, haslo):
+    while True:
+        channel.send(f'scp /cc/his_rbc/his_rbc/icd_buildenv/iso/{etykieta}.iso {tgi}@debers00008:/home/{tgi}/tmp/\n'.encode())
+        zwrot = skan_zwrot(channel, tgi, debers, haslo=haslo)
+
+        if zwrot.count('Quota') or zwrot.count('quota'):
+            _ = input(f"Brakuje miejsca na /home/{tgi}/tmp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
+        elif zwrot.count('No such file or directory'):
+            _ = input(f'Nie ma obrazu {etykieta}.iso w katalogu ...icd_buildenv/iso/. Naciśnij coż żeby wyjść.')
+            zamykanie_polaczenia(conn, channel)
+            sys.exit()
+        else:
+            break
 
 if __name__ == '__main__':
     rbc_prod = '10.220.30.208'
@@ -730,11 +820,28 @@ if __name__ == '__main__':
 
     debers045_conn, debers045_channel = nawiazanie_polaczenia(debersuxv045, login_abbr, haslo_main, 'debersuxv045')
 
-    debers045_channel.send('ct setview his_rbc_cupl_copy_data\n'.encode('utf-8'))
+    debers045_channel.send('ct setview his_rbc_cupl_copy_data\n'.encode())
     skan(debers045_channel, login_abbr, 'debersuxv045')
 
 
+    etykieta_systemowa = 'ETCS_RC_1.2_PL2.3.0.2'
 
+
+    edcs_his_rbc_lista = edcs_his_rbc(linia_main, etykieta_systemowa, 'test0011')
+
+    zapisywanie_edcs_his_rbc(debers045_channel, login_abbr, edcs_his_rbc_lista, 'edcs_his_rbc')
+
+    data_pack_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011')
+
+    debers045_channel.send('ct setview his_rbc_cupl_build\n'.encode())
+
+    edcs_his_rbc_build_lista = edcs_his_rbc_build(linia_main, etykieta_systemowa, 'test0011')
+
+    zapisywanie_edcs_his_rbc(debers045_channel, login_abbr, edcs_his_rbc_build_lista, 'edcs_his_rbc_build')
+
+    mk_inst_cd(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011')
+
+    kopiowanie_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011', haslo_main)
 
 
     zamykanie_polaczenia(debers045_conn, debers045_channel)
