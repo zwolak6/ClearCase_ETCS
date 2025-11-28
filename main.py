@@ -27,7 +27,7 @@ def test_poprawnosci_polecenia(channel, tgi, debers):
     print(lista)
 
 
-def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
+def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo='', potw=False):
     """Skan i zwrot z terminala. Liczniki są po to, żeby nie wysyłać po kilka razy komend"""
     string = ''
 
@@ -52,10 +52,16 @@ def skan_zwrot(channel, tgi='', debers='debers00008', ciag_znakow='', haslo=''):
             licznik_log += 1
 
         if ciag_znakow != '':
-            if string.count(ciag_znakow) and licznik == 0:
-                time.sleep(0.1)
-                channel.send('\n'.encode())
-                licznik += 1
+            if potw:
+                if string.count(ciag_znakow) and licznik == 0:
+                    time.sleep(0.1)
+                    channel.send('y\n'.encode())
+                    licznik += 1
+            else:
+                if string.count(ciag_znakow) and licznik == 0:
+                    time.sleep(0.1)
+                    channel.send('\n'.encode())
+                    licznik += 1
         if haslo != '':
             if string.count("password:") == 1 and licznik_passwd == 0:
                 time.sleep(0.1)
@@ -166,7 +172,7 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
                         print('Wybrana ścieżka nie zawiera katalogu poland')
                         _ = input('Naciśnij coś żeby wyjść.')
                         sys.exit()
-                    print(f"Wrzucam {plik}")
+                    #print(f"Wrzucam {plik}")
                     sci_do_pliku = '/'.join([sci, plik])
                     sftp.put(sci_do_pliku, remote_path_cc)
 
@@ -327,7 +333,7 @@ def init_prod_repo(rbc_prod_conn_init, channel, tgi, katalog_init):
         channel.close()
         rbc_prod_conn_init.close()
         sys.exit()
-    print('initProdRepo OK')
+    print('initProdRepo OK\n')
 
 
 def configure_all(rbc_prod_conn_init, channel):
@@ -340,12 +346,13 @@ def configure_all(rbc_prod_conn_init, channel):
         print(zwrot_configure)
         zamykanie_polaczenia(rbc_prod_conn_init, channel)
         sys.exit()
-    print('configureAll OK')
+    print('configureAll OK\n')
 
     print('Odpalam collectUsedData...')
     channel.send(f"collectUsedData customer\n".encode())
     _ = skan_zwrot(channel, ciag_znakow='Return only.')  # Nie ma co sprawdzać
-
+    print('collectUsedData OK')
+    print('Odpalam ConfgDataRBC2Pdf ...')
     channel.send('cd; ConfigDataRBC2Pdf.sh DataProd.xml\n'.encode())
     zwrot_pdf = skan_zwrot(channel)
     if not zwrot_pdf.count('DataProd.xml transformed to DataProd.pdf'):
@@ -355,6 +362,7 @@ def configure_all(rbc_prod_conn_init, channel):
         zamykanie_polaczenia(rbc_prod_conn_init, channel)
         sys.exit()
 
+    print('ConfgDataRBC2Pdf OK\n')
     channel.send('exit\n'.encode())
     skan(channel)
     channel.send('exit\n'.encode())
@@ -363,7 +371,7 @@ def configure_all(rbc_prod_conn_init, channel):
 
 def katalog_roboczy(channel):
     while True:
-        katalog = input('Podaj nazwę katalogu roboczego do wrzucenia danych RBC: ')
+        katalog = input('\n\tPodaj nazwę katalogu roboczego do wrzucenia danych RBC: ')
         if not tworzenie_katalogu_rbc(channel, katalog).count('mkdir: Failed'):
             print(f"Utworzono katalog {katalog}")
             break
@@ -391,8 +399,8 @@ def create_cd(conn, channel, login, haslo='', debers=''):
         _ = input("Coś poszło nie tak z ")
         zamykanie_polaczenia(conn, channel)
 
+    print("CreateCDs OK\n")
     lista_zwrot = zwrot.split('\r\n')
-    print(lista_zwrot[-4].strip())
     return lista_zwrot[-4].strip()
 
 
@@ -407,7 +415,7 @@ def import_danych_do_cc(channel, debers,  login,  linia, etykieta, preview):
         return zwrot
     else:
         channel.send(
-            f"clearfsimport -nsetevent -recurse -mklabel {etykieta} /home/{login}/project_data/poland/{linia} .\n".encode())
+            f"clearfsimport -nsetevent -recurse -identical -mklabel {etykieta} /home/{login}/project_data/poland/{linia} .\n".encode())
         skan_zwrot(channel, login, debers)
         return None
 
@@ -419,8 +427,8 @@ def zamykanie_polaczenia(conn, channel):
 def etykieta_cc():
     """Określanie etykiety do CC"""
     while True:
-        etykieta = input("Podaj etykietę: ")
-        potw = input(f"Etykieta to {etykieta}, zgadza się?[T/N]: ").upper()
+        etykieta = input("\n\tPodaj etykietę: ")
+        potw = input(f"\tEtykieta to {etykieta}, zgadza się?[T/N]: ").upper()
         if potw == 'T':
             zwrot = etykieta
             break
@@ -430,7 +438,7 @@ def linia_cc(linia, przelacznik = True):
     """Określanie katalogu linii do CC"""
     while True:
         if przelacznik:
-            decyzja = input(f"Czy {linia} to katalog linii do importu plików do CC?[T/N]: ").upper()
+            decyzja = input(f"\n\tCzy {linia} to katalog linii do importu plików do CC?[T/N]: ").upper()
         else:
             decyzja = 'N'
 
@@ -439,8 +447,8 @@ def linia_cc(linia, przelacznik = True):
             break
         elif decyzja == 'N':
             while True:
-                linia_zwrot = input("Podaj katalog linii: ")
-                potw = input(f"Katalog linii to {linia_zwrot}, zgadza się?[T/N]: ").upper()
+                linia_zwrot = input("\tPodaj katalog linii: ")
+                potw = input(f"\tKatalog linii to {linia_zwrot}, zgadza się?[T/N]: ").upper()
                 if potw == 'T':
                     zwrot = linia_zwrot
                     break
@@ -475,19 +483,17 @@ def sprawdzanie_import_preview(zwrot : str, conn, channel):
         if l.count(' element'):
             lista_element.append(l)
 
-    print(lista_element)
-    input("Czekam")
     if len(lista_element) != 0:
         print("Lista nowych plików:")
         for elem in lista:
             print(elem)
 
         while True:
-            zwrotka = input("Czy tak ma być?[T/N]: ").upper()
+            zwrotka = input("\tCzy tak ma być?[T/N]: ").upper()
             if zwrotka == 'T':
                 break
             elif zwrotka == 'N':
-                _ = input("To do poprawy. Naciśnij coś żeby wyjść.")
+                _ = input("\tTo do poprawy. Naciśnij coś żeby wyjść.")
                 zamykanie_polaczenia(conn, channel)
                 sys.exit()
             else:
@@ -501,7 +507,6 @@ def czyt_istniejacego_edcs(channel, tgi, debers):
 
     lista = zwrot.split('\r\n')
 
-    print(lista)
     return lista[1:-1]
 
 def zapisywanie_istniejacego_edcs(conn, tgi, lista):
@@ -520,7 +525,7 @@ def zapisywanie_istniejacego_edcs(conn, tgi, lista):
 
     time.sleep(1)
     remote = f'/home/{tgi}/tmp/edcs_aktualny.txt'
-    print("Sciezka ", remote)
+    #print("Sciezka ", remote)
     with conn.open_sftp() as sftp:
         sftp.put('edcs_aktualny.txt', remote)
 
@@ -543,16 +548,19 @@ def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
     """Kopiowanie DataProd.pdf na tmp w debers00008"""
     channel.send('cd\n'.encode())
     skan(channel)
-    channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/tmp\n'.encode())
+    print("Kopiuję DataProd.pdf do tpm na debers00008.\n")
+    channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/tmp/rbc\n'.encode())
     zwrot = skan_zwrot(channel, debers='XXX', haslo=haslo) # XXX bo dałem debers00008 jako default a to łapie za wcześnie, XXX jest fejkowe
     if zwrot.count("No such file or directory"):
         _ = input("Nie mogę znależć DataProd.pdf. Naciśnij coś żeby wyjść.")
         zamykanie_polaczenia(conn, channel)
         sys.exit()
 
-def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str, folder_obraz_rbc: str):
+def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str, folder: str):
     """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/tmp"""
-    channel.send(f'cd {folder_obraz_rbc}\n'.encode())
+
+    print('Kopiowanie obrazów .iso do tpm na debers00008...')
+    channel.send(f'cd {folder}\n'.encode())
     skan(channel, tgi, debers)
     channel.send('ls -l\n'.encode())
     zwrot = skan_zwrot(channel, tgi, debers)
@@ -566,13 +574,13 @@ def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, hasl
     if len(lista_iso) == 3:
 
         while True:
-            channel.send(f'scp *.iso {tgi_abbr}@debers00008:/home/{tgi_abbr}/tmp\n'.encode())
+            channel.send(f'scp *.iso {tgi_abbr}@debers00008:/home/{tgi_abbr}/tmp/rbc\n'.encode())
             zwrot = skan_zwrot(channel, tgi, debers='debersuxvl03', haslo=haslo)
 
             if zwrot.count('Quota') or zwrot.count('quota'):
                 _ = input(f"Brakuje miejsca na /home/{tgi_abbr}/tmp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
             elif zwrot.count('No such file or directory'):
-                _ = input(f'Nie ma obrazów w katalogu {folder_obraz_rbc}. Naciśnij coż żeby wyjść.')
+                _ = input(f'Nie ma obrazów w katalogu {folder}. Naciśnij coż żeby wyjść.')
                 zamykanie_polaczenia(conn, channel)
             else:
                 break
@@ -581,6 +589,8 @@ def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, hasl
         _ = input('Obrazy .iso RBC nie wygenerowały się poprawnie. Naciśnij coś żeby wyjść')
         zamykanie_polaczenia(conn, channel)
         sys.exit()
+
+    print('Ok, kopiowanie zakończone.\n')
 
 
 def edcs_his_rbc(linia, etykieta_sys, etykieta):
@@ -653,8 +663,10 @@ def zapisywanie_edcs_his_rbc(channel, tgi, lista, nazwa):
         licznik += 1
 
     channel.send(f'ct setcs /home/{tgi}/tmp/{nazwa}\n'.encode())
+    skan(channel, tgi, 'debersuxv045')
 
 def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
+    print('Odpalam skrypt mkDataPackHISRBC ...')
     channel.send('/cc/lci/estw_l90_5/estw/common/tool/scripts/mkDataPackHISRBC.sh -c poland\n'.encode())
     zwrot = skan_zwrot(channel, tgi, debers)
 
@@ -663,6 +675,8 @@ def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
         print(zwrot)
         zamykanie_polaczenia(conn, channel)
         sys.exit()
+
+    print('mkDataPackHISRBC ok.\n')
 
     channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
     skan(channel, tgi, debers)
@@ -677,6 +691,7 @@ def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
     skan(channel, tgi, debers)
 
 def mk_inst_cd(conn, channel, tgi, debers, etykieta):
+    print('Odpalam skrypt mkInstCD ...')
     channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
     skan(channel, tgi, debers)
 
@@ -685,12 +700,15 @@ def mk_inst_cd(conn, channel, tgi, debers, etykieta):
 
     if not zwrot.count('SUCC: all done'):
         _ = input('Coś poszło nie tak z robieniem obrazu his_rbc .iso. Naciśnij coś, żeby zobaczyć loga i wyjść')
+        print(zwrot)
         zamykanie_polaczenia(conn, channel)
 
+    print("mkInstCD OK.\n")
 
 def kopiowanie_his_rbc(conn, channel, tgi, debers, etykieta, haslo):
+    print("Kopiowanie obrazu his_rbc do tmp na debers00008 ...")
     while True:
-        channel.send(f'scp /cc/his_rbc/his_rbc/icd_buildenv/iso/{etykieta}.iso {tgi}@debers00008:/home/{tgi}/tmp/\n'.encode())
+        channel.send(f'scp /cc/his_rbc/his_rbc/icd_buildenv/iso/{etykieta}.iso {tgi}@debers00008:/home/{tgi}/tmp/his_rbc/\n'.encode())
         zwrot = skan_zwrot(channel, tgi, debers, haslo=haslo)
 
         if zwrot.count('Quota') or zwrot.count('quota'):
@@ -701,6 +719,59 @@ def kopiowanie_his_rbc(conn, channel, tgi, debers, etykieta, haslo):
             sys.exit()
         else:
             break
+
+    print("Kopiowanie zakończone.\n")
+
+
+def import_obrazow_na_cc(conn, channel, tgi, etykieta, debers, linia):
+    """Importa obrazow na cc."""
+
+    channel.send(f'cd /home/{tgi}/tmp/rbc/\n'.encode())
+    skan(channel, tgi, debers)
+
+    prefix = 'pl_mmi@'
+    channel.send('ls -l\n'.encode())
+    zwrot = skan_zwrot(channel, tgi, debers)
+    lista_tmp = zwrot.split('\r\n')[1:-1]
+
+    print(lista_tmp)
+
+    lista_data_elem = [x.split(' ')[-1] for x in lista_tmp]
+
+    print(lista_data_elem)
+
+    lista_iso = [x for x in lista_data_elem if not x.startswith('pl_') and (x.endswith('FCdump.iso') or x.endswith('OMS.iso') or x.endswith('RBCAUR.iso'))]
+
+    print(lista_iso)
+    if len(lista_iso) != 3:
+        _ = input('Brak obrazów w katalogu tmp/rbc. Naciśnij coś żeby wyjść.')
+        zamykanie_polaczenia(conn, channel)
+        sys.exit()
+
+    lista_prefix_iso = []
+    for elem in lista_iso:
+        channel.send(f'mv ./{elem} ./{prefix+elem}\n')
+        _ = skan_zwrot(channel, tgi, debers, ciag_znakow=".iso'?", potw=True)
+        lista_prefix_iso.append(prefix+elem)
+
+    print(lista_prefix_iso)
+    channel.send(f'cd /cc/l905/customer/poland/{linia}/00_ctc/rbc/01/image\n'.encode())
+    zwrot = skan_zwrot(channel, tgi, debers)
+    if zwrot.count('No such file or directory'):
+        _ = input('Brak ścieżki /cc/l905/customer/poland/{linia}/00_ctc/rbc/01/image. Naciśnij coś żeby wyjść.')
+        sys.exit()
+
+    for elem in lista_prefix_iso:
+        channel.send(
+            f'clearfsimport -nsetevent -recurse -preview -mklabel {etykieta} /home/{tgi}/tmp/rbc/{elem} .\n'.encode())
+        skan(channel, tgi, debers)
+
+    channel.send(
+        f'clearfsimport -nsetevent -recurse -preview -mklabel {etykieta} /home/{tgi}/tmp/rbc/DataProd.pdf .\n'.encode())
+    skan(channel, tgi, debers)
+
+
+
 
 if __name__ == '__main__':
     rbc_prod = '10.220.30.208'
@@ -716,10 +787,10 @@ if __name__ == '__main__':
 
     linia_main = sciezka_main.split("/")[-1]
     
-    login_main = input('\nPodaj login do produkcji obrazu rbc: ')
+    login_main = input('\n\tPodaj login do produkcji obrazu rbc: ')
     login_abbr = login_main.split('_')[0]
-    haslo_main = getpass.getpass(prompt='Podaj haslo: ')
-    """
+    haslo_main = getpass.getpass(prompt='\tPodaj haslo: ')
+
     print("Łączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
@@ -730,6 +801,13 @@ if __name__ == '__main__':
     # Przechodzimy do katalogu poland
     channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
     skan(channel_debers_08, login_abbr, 'debers00008')
+
+
+    lista_istniejaca_edcs = czyt_istniejacego_edcs(channel_debers_08, login_abbr, 'debers00008')
+
+    zapisywanie_istniejacego_edcs(debers_08_conn, login_abbr, lista_istniejaca_edcs)
+
+    ustawianie_edcs_do_importu(channel_debers_08, login_abbr, 'debers00008')
 
     
     # Określamy i sprawdzamy etykietę
@@ -757,15 +835,6 @@ if __name__ == '__main__':
             print(f'Podany katalog {katalog_linii} istnieje podaj jeszcze raz')
             etykieta_main = linia_cc(linia_main, przelacznik=False)
 
-    lista_istniejaca_edcs = czyt_istniejacego_edcs(channel_debers_08, login_abbr, 'debers00008')
-
-    zapisywanie_istniejacego_edcs(debers_08_conn, login_abbr, lista_istniejaca_edcs)
-
-    ustawianie_edcs_do_importu(channel_debers_08, login_abbr, 'debers00008')
-
-    input("Czekam")
-
-    #sys.exit()
 
     print("Preview importu plików ...")
     zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr,
@@ -776,17 +845,19 @@ if __name__ == '__main__':
     sprawdzanie_import_preview(zwrot_import_preview, debers_08_conn, channel_debers_08)
 
     print("Importowanie i etykietowanie ...")
-    #zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr, katalog_linii, etykieta_main, False)
+    zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr, katalog_linii, etykieta_main, False)
 
     ustawienie_oryginalnego_edcs(channel_debers_08, login_abbr, 'debers00008')
 
-    print("Zamykanie połączenia do debers00008 ...")
+    print("Zamykanie połączenia do debers00008 ...\n")
     zamykanie_polaczenia(debers_08_conn, channel_debers_08)
+
+
 
     # Polaczenie do rbc prod
     print("Łączenie z hostem do produkcji obrazu RBC...")
     rbc_prod_conn, channel_rbc = nawiazanie_polaczenia(rbc_prod, login_main, haslo_main)
-    print(f"Ok, połączono z {rbc_prod}")
+    print(f"Ok, połączono z hostem do produkcji obrazu RBC.")
 
     # Tworzymy katalog, jeśli już jest pytamy jeszcze raz
     katalog_rbc = katalog_roboczy(channel_rbc)
@@ -802,46 +873,59 @@ if __name__ == '__main__':
 
     kopiowanie_data_prod_pdf(rbc_prod_conn, channel_rbc, login_abbr, haslo_main)
 
+    print("Zamykanie połączenia z hostem do produkcji obrazu RBC.\n")
     zamykanie_polaczenia(rbc_prod_conn, channel_rbc)
 
-    print("Łączenie z hostem debersuxvl03...")
+
+    print("\nŁączenie z hostem debersuxvl03...")
     debersuxvl03_conn, debersuxvl03_channel = nawiazanie_polaczenia(debersuxvl03,
                                                                     login_main, haslo_main, debers='debersuxvl03')
-    print(f"Ok, połączono z debersuxvl03")
+    print(f"Ok, połączono z debersuxvl03.")
 
     folder_obraz_rbc = create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
 
-    print("Tutaj jesteś")
-    kopiowanie_rbc_iso(debersuxvl03_conn, debersuxvl03_channel, login_main, login_abbr,'debersuxvl03', haslo_main)
+    kopiowanie_rbc_iso(debersuxvl03_conn, debersuxvl03_channel, login_main, login_abbr,'debersuxvl03', haslo_main, folder_obraz_rbc)
 
-    test_poprawnosci_polecenia(debersuxvl03_channel, login_main, 'debersuxvl03')
+    zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
 
-    zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)"""
+    print("Zamykanie połączenia z hostem debersuxvl03.\n")
 
+
+    print("\nŁączenie z hostem debersuxv045...")
     debers045_conn, debers045_channel = nawiazanie_polaczenia(debersuxv045, login_abbr, haslo_main, 'debersuxv045')
 
-    debers045_channel.send('ct setview his_rbc_cupl_copy_data\n'.encode())
-    skan(debers045_channel, login_abbr, 'debersuxv045')
 
 
     etykieta_systemowa = 'ETCS_RC_1.2_PL2.3.0.2'
 
+    debers045_channel.send('ct setview his_rbc_cupl_copy_data\n'.encode())
+    skan(debers045_channel, login_abbr, 'debersuxv045')
 
-    edcs_his_rbc_lista = edcs_his_rbc(linia_main, etykieta_systemowa, 'test0011')
+    edcs_his_rbc_lista = edcs_his_rbc(linia_main, etykieta_systemowa, etykieta_main)
 
     zapisywanie_edcs_his_rbc(debers045_channel, login_abbr, edcs_his_rbc_lista, 'edcs_his_rbc')
 
-    data_pack_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011')
+    data_pack_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', etykieta_main)
 
     debers045_channel.send('ct setview his_rbc_cupl_build\n'.encode())
 
-    edcs_his_rbc_build_lista = edcs_his_rbc_build(linia_main, etykieta_systemowa, 'test0011')
+    edcs_his_rbc_build_lista = edcs_his_rbc_build(linia_main, etykieta_systemowa, etykieta_main)
 
     zapisywanie_edcs_his_rbc(debers045_channel, login_abbr, edcs_his_rbc_build_lista, 'edcs_his_rbc_build')
 
-    mk_inst_cd(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011')
+    mk_inst_cd(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', etykieta_main)
 
-    kopiowanie_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', 'test0011', haslo_main)
+    kopiowanie_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', etykieta_main, haslo_main)
 
-
+    print("Zamykam połączenie do debersuxv045...\n")
     zamykanie_polaczenia(debers045_conn, debers045_channel)
+
+    print("Łączenie z debers0008...")
+    debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
+
+    import_obrazow_na_cc(debers_08_conn, channel_debers_08, login_abbr, etykieta_main, 'debers00008', linia_main)
+
+    print(f'Wszystkie nowo utworzone obrazy znajdują się w katalogu /home/{login_abbr}/tmp na debers00008.')
+
+    print('\n\n\tFIN.\n')
+
