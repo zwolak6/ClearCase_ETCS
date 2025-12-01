@@ -92,12 +92,12 @@ def nawiazanie_polaczenia(ip, user, passw, debers=''):
     try:
         client.connect(host, username=username, password=password, port=22)
     except TimeoutError:
-        print('\n\tNie znaleziono hosta {}\n'.format(host))
+        print('\nNie znaleziono hosta {}\n'.format(host))
         input('Naduś coś żeby wyjść\n')
         client.close()
         sys.exit()
     except AuthenticationException:
-        print('\n\tBłędne dane logowania\n')
+        print('\nBłędne dane logowania\n')
         input('Naduś coś żeby wyjść\n')
         client.close()
         sys.exit()
@@ -108,11 +108,22 @@ def nawiazanie_polaczenia(ip, user, passw, debers=''):
     return client, channel
 
 
+def usuwanie_obrazow(channel, tgi, debers):
+    """Usuwanie obrazow z folderów"""
+
+    for folder in ['rbc', 'his_rbc']:
+        channel.send(f'cd /home/{tgi}/tmp/{folder}/\n'.encode())
+        skan(channel, tgi, debers)
+        channel.send(f'rm -f *.iso\n'.encode())
+        skan(channel, tgi, debers)
+
+    input("Czekam")
+
 def wrzucanie_plikow(conn, tgi, lista, katalog_, sciezka):
     """Wrzucanie plikow z katalogu rbc do katalogu nowo utworzonego, usuwanie przedrostków przed @"""
 
     sciezka = "/".join([sciezka, '00_ctc/rbc/01/config'])
-    print(f"Presyłanie plików RBC...")
+    print(f"\nPresyłanie plików RBC...")
     with conn.open_sftp() as sftp:
         for plik in lista:
             path = f'{sciezka}/{plik}'
@@ -139,7 +150,7 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
         _ = input(f'Katalog {katalog_linia} już istnieje lub nie udało się go stworzyć. Naciśnij coś żeby wyjść.')
         sys.exit()
 
-    print(f"Presyłanie plików do /home/{tgi}/project_data/poland/...")
+    print(f"\nPresyłanie plików do /home/{tgi}/project_data/poland/...")
 
     with sftp:
         for (sci, katalogi, pliki) in os.walk(sciezka):
@@ -169,7 +180,7 @@ def wrzucanie_plikow_do_cc(conn, tgi, sciezka):
                     try:
                         remote_path_cc = '/'.join([remote_path, sci.split('poland/')[1].replace('\\', '/'), plik])
                     except IndexError:
-                        print('Wybrana ścieżka nie zawiera katalogu poland')
+                        print('\nWybrana ścieżka nie zawiera katalogu poland')
                         _ = input('Naciśnij coś żeby wyjść.')
                         sys.exit()
                     #print(f"Wrzucam {plik}")
@@ -185,7 +196,7 @@ def spr_sciezek(sciezka: str, kontynuacja: str, licznik : int) -> int:
         zwrot: list = os.listdir(os.path.join(sciezka, *lista))
         if len(zwrot) == 0:
             licznik += 1
-            print(f'Brak plików w scieżce {kontynuacja}')
+            print(f'\nBrak plików w scieżce {kontynuacja}')
     except FileNotFoundError:
         licznik += 1
         print(f"Brak katalogu {kontynuacja}")
@@ -215,18 +226,18 @@ def katalog_wybor():
         if sciezka.count(".dmt") and pliki:
             ilosc = len(pliki)
             if ilosc > 1:
-                print("W katalogu 00_ctc/.dmt jest więcej niż jeden plik, do poprawy.")
+                print("\nW katalogu 00_ctc/.dmt jest więcej niż jeden plik, do poprawy.")
                 licznik += 1
             elif ilosc == 0:
                 print("Brak plików w katalogu 00_ctc/.dmt, do poprawy.")
                 licznik += 1
             elif ilosc == 1:
                 if pliki[0].endswith('.7z') or pliki[0].endswith('.mdb'):
-                    print("Złe rozszerzenie pliku bazodanowego. Jest 7z, powinno być zip.")
+                    print("\nZłe rozszerzenie pliku bazodanowego. Jest 7z, powinno być zip.")
 
         if sciezka.count(r'\00_ctc\rbc\01\config'):
             if len(pliki) != 8:
-                print("W katalogu rbc/01/config powinno być 8 plików, do poprawy")
+                print("\nW katalogu rbc/01/config powinno być 8 plików, do poprawy")
                 licznik += 1
             elif len(pliki) == 8:
                 lista_potrzebnych = ['AURData.xml', 'Coor_STR.xml', 'Location', 'STR.xml', 'SafeLocationData.xml',
@@ -240,7 +251,7 @@ def katalog_wybor():
         if sciezka.count(r'\00_ctc\his_rbc') and pliki and katalogi:
             lista_opr = [x for x in katalogi if x.count("opr")]
             if len(lista_opr) == 0:
-                print("Brak katalogów opr")
+                print("\nBrak katalogów opr")
             elif len(lista_opr) > 1:
                 katalog_opr = os.path.join(sciezka, lista_opr[0], 'config')
                 zawartosc_pliku = os.listdir(katalog_opr)
@@ -259,32 +270,32 @@ def katalog_wybor():
                     try:
                         zwrot = os.listdir(os.path.join(sciezka_init, stacja))
                         if len(zwrot) != 2:
-                            print(f"Brak katalogów w {stacja}, do poprawy.")
+                            print(f"\nBrak katalogów w {stacja}, do poprawy.")
                         elif len(zwrot) == 2:
                             try:
                                 zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'his_rbc'))
                                 if len(zwrot) != 2:
-                                    print(f'Brak katalogów w {stacja}/his_rbc, do poprawy.')
+                                    print(f'\nBrak katalogów w {stacja}/his_rbc, do poprawy.')
                                     licznik += 1
                             except FileNotFoundError:
-                                print(f"Brak katalogu {stacja}/his_rbc")
+                                print(f"\nBrak katalogu {stacja}/his_rbc")
                                 licznik += 1
 
                             try:
                                 zwrot = os.listdir(os.path.join(sciezka_init, stacja, 'im/01/config'))
                                 if len(zwrot) != 1:
-                                    print(f'Brak pliku elem.dat w {stacja}/im/01/config, do poprawy.')
+                                    print(f'\nBrak pliku elem.dat w {stacja}/im/01/config, do poprawy.')
                                     licznik += 1
                             except FileNotFoundError:
-                                print(f"Brak katalogu {stacja}/im/01/config")
+                                print(f"\nBrak katalogu {stacja}/im/01/config")
                                 licznik += 1
 
                     except FileNotFoundError:
-                        print(f"Brak katalogu stacyjnego {stacja}, do poprawy.")
+                        print(f"\nBrak katalogu stacyjnego {stacja}, do poprawy.")
                         licznik += 1
 
     if licznik > 0:
-        input("Są rzeczy do poprawy. Naciśnij coś żeby wyjść i poprawić.")
+        input("\nSą rzeczy do poprawy. Naciśnij coś żeby wyjść i poprawić.")
         sys.exit()
 
     return sciezka_init
@@ -324,21 +335,21 @@ def init_prod_repo(rbc_prod_conn_init, channel, tgi, katalog_init):
     skan(channel)
     channel.send(f"cd /cc/rbc/Production/bin\n".encode())
     skan(channel)
-    print("Odpalam initProdRepo...")
+    print("\nOdpalam initProdRepo...")
     channel.send(f"initProdRepo -setview -cae {katalog_init} -src /home/{tgi}/{katalog_init} PKP.1.3.2.0 02\n".encode())
     zwrot = skan_zwrot(channel)
     if zwrot.count('incorrect parameters'):
-        input('Coś nie tak z initProdRepo, naciśnij coś żeby zobaczyć loga')
+        input('\nCoś nie tak z initProdRepo, naciśnij coś żeby zobaczyć loga')
         print(zwrot)
         channel.close()
         rbc_prod_conn_init.close()
         sys.exit()
-    print('initProdRepo OK\n')
+    print('\ninitProdRepo OK\n')
 
 
 def configure_all(rbc_prod_conn_init, channel):
     """Uruchamianie skryptów 'configureAll' i 'collectUserData'"""
-    print("Odpalam configureAll...")
+    print("\nOdpalam configureAll...")
     channel.send(f"configureAll customer\n".encode())
     zwrot_configure = skan_zwrot(channel)
     if not zwrot_configure.count('successful.'):
@@ -346,12 +357,12 @@ def configure_all(rbc_prod_conn_init, channel):
         print(zwrot_configure)
         zamykanie_polaczenia(rbc_prod_conn_init, channel)
         sys.exit()
-    print('configureAll OK\n')
+    print('\nconfigureAll OK')
 
-    print('Odpalam collectUsedData...')
+    print('\nOdpalam collectUsedData...')
     channel.send(f"collectUsedData customer\n".encode())
     _ = skan_zwrot(channel, ciag_znakow='Return only.')  # Nie ma co sprawdzać
-    print('collectUsedData OK')
+    print('\ncollectUsedData OK')
     print('Odpalam ConfgDataRBC2Pdf ...')
     channel.send('cd; ConfigDataRBC2Pdf.sh DataProd.xml\n'.encode())
     zwrot_pdf = skan_zwrot(channel)
@@ -362,7 +373,7 @@ def configure_all(rbc_prod_conn_init, channel):
         zamykanie_polaczenia(rbc_prod_conn_init, channel)
         sys.exit()
 
-    print('ConfgDataRBC2Pdf OK\n')
+    print('\nConfgDataRBC2Pdf OK')
     channel.send('exit\n'.encode())
     skan(channel)
     channel.send('exit\n'.encode())
@@ -371,12 +382,12 @@ def configure_all(rbc_prod_conn_init, channel):
 
 def katalog_roboczy(channel):
     while True:
-        katalog = input('\n\tPodaj nazwę katalogu roboczego do wrzucenia danych RBC: ')
+        katalog = input('\nPodaj nazwę katalogu roboczego do wrzucenia danych RBC: ')
         if not tworzenie_katalogu_rbc(channel, katalog).count('mkdir: Failed'):
             print(f"Utworzono katalog {katalog}")
             break
         else:
-            print(f"Katalog {katalog} już istnieje.")
+            print(f"\nKatalog {katalog} już istnieje.")
     return katalog
 
 
@@ -388,7 +399,7 @@ def tworzenie_katalogu_rbc(channel, katalog_nowy):
 
 def create_cd(conn, channel, login, haslo='', debers=''):
     """Tworzenie obrazu createCDs"""
-    print("Odpalanie skryptu CreateCDs...")
+    print("\nOdpalanie skryptu CreateCDs...")
     channel.send("cd /local/CD_3.3.6/bin\n".encode())
     skan(channel, login, debers)
     channel.send(f"sudo ./createCDs -aur {login} debersuwg-rbcprod1\n".encode())
@@ -396,10 +407,10 @@ def create_cd(conn, channel, login, haslo='', debers=''):
 
     if not zwrot.count('was generated'):
         print(zwrot)
-        _ = input("Coś poszło nie tak z ")
+        _ = input("\nCoś poszło nie tak z ")
         zamykanie_polaczenia(conn, channel)
 
-    print("CreateCDs OK\n")
+    print("\nCreateCDs OK")
     lista_zwrot = zwrot.split('\r\n')
     return lista_zwrot[-4].strip()
 
@@ -427,8 +438,8 @@ def zamykanie_polaczenia(conn, channel):
 def etykieta_cc():
     """Określanie etykiety do CC"""
     while True:
-        etykieta = input("\n\tPodaj etykietę: ")
-        potw = input(f"\tEtykieta to {etykieta}, zgadza się?[T/N]: ").upper()
+        etykieta = input("\nPodaj etykietę: ")
+        potw = input(f"Etykieta to {etykieta}, zgadza się?[T/N]: ").upper()
         if potw == 'T':
             zwrot = etykieta
             break
@@ -438,7 +449,7 @@ def linia_cc(linia, przelacznik = True):
     """Określanie katalogu linii do CC"""
     while True:
         if przelacznik:
-            decyzja = input(f"\n\tCzy {linia} to katalog linii do importu plików do CC?[T/N]: ").upper()
+            decyzja = input(f"\nCzy {linia} to katalog linii do importu plików do CC?[T/N]: ").upper()
         else:
             decyzja = 'N'
 
@@ -447,8 +458,8 @@ def linia_cc(linia, przelacznik = True):
             break
         elif decyzja == 'N':
             while True:
-                linia_zwrot = input("\tPodaj katalog linii: ")
-                potw = input(f"\tKatalog linii to {linia_zwrot}, zgadza się?[T/N]: ").upper()
+                linia_zwrot = input("\nPodaj katalog linii: ")
+                potw = input(f"\nKatalog linii to {linia_zwrot}, zgadza się?[T/N]: ").upper()
                 if potw == 'T':
                     zwrot = linia_zwrot
                     break
@@ -484,20 +495,20 @@ def sprawdzanie_import_preview(zwrot : str, conn, channel):
             lista_element.append(l)
 
     if len(lista_element) != 0:
-        print("Lista nowych plików:")
+        print("\nLista nowych plików:")
         for elem in lista:
             print(elem)
 
         while True:
-            zwrotka = input("\tCzy tak ma być?[T/N]: ").upper()
+            zwrotka = input("\nCzy tak ma być?[T/N]: ").upper()
             if zwrotka == 'T':
                 break
             elif zwrotka == 'N':
-                _ = input("\tTo do poprawy. Naciśnij coś żeby wyjść.")
+                _ = input("\nTo do poprawy. Naciśnij coś żeby wyjść.")
                 zamykanie_polaczenia(conn, channel)
                 sys.exit()
             else:
-                print("Błędny wybór, powinno być T lub N.")
+                print("\nBłędny wybór, powinno być T lub N.")
 
 
 def czyt_istniejacego_edcs(channel, tgi, debers):
@@ -548,7 +559,7 @@ def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
     """Kopiowanie DataProd.pdf na tmp w debers00008"""
     channel.send('cd\n'.encode())
     skan(channel)
-    print("Kopiuję DataProd.pdf do tpm na debers00008.\n")
+    print("\nKopiuję DataProd.pdf do tpm na debers00008.\n")
     channel.send(f'scp DataProd.pdf {tgi}@debers00008:/home/{tgi}/tmp/rbc\n'.encode())
     zwrot = skan_zwrot(channel, debers='XXX', haslo=haslo) # XXX bo dałem debers00008 jako default a to łapie za wcześnie, XXX jest fejkowe
     if zwrot.count("No such file or directory"):
@@ -559,7 +570,7 @@ def kopiowanie_data_prod_pdf(conn, channel, tgi, haslo):
 def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, haslo: str, folder: str):
     """Sprawdzamy, czy obrazy iso się stworzyły i kopiujemy do katalogu home/<tgi>/tmp"""
 
-    print('Kopiowanie obrazów .iso do tpm na debers00008...')
+    print('\nKopiowanie obrazów .iso do tpm na debers00008...')
     channel.send(f'cd {folder}\n'.encode())
     skan(channel, tgi, debers)
     channel.send('ls -l\n'.encode())
@@ -578,19 +589,19 @@ def kopiowanie_rbc_iso(conn, channel, tgi: str, tgi_abbr: str, debers: str, hasl
             zwrot = skan_zwrot(channel, tgi, debers='debersuxvl03', haslo=haslo)
 
             if zwrot.count('Quota') or zwrot.count('quota'):
-                _ = input(f"Brakuje miejsca na /home/{tgi_abbr}/tmp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
+                _ = input(f"\nBrakuje miejsca na /home/{tgi_abbr}/tmp/. Zwolnij miejsce i naciśnij coś żeby kontynuować.")
             elif zwrot.count('No such file or directory'):
-                _ = input(f'Nie ma obrazów w katalogu {folder}. Naciśnij coż żeby wyjść.')
+                _ = input(f'\nNie ma obrazów w katalogu {folder}. Naciśnij coż żeby wyjść.')
                 zamykanie_polaczenia(conn, channel)
             else:
                 break
 
     else:
-        _ = input('Obrazy .iso RBC nie wygenerowały się poprawnie. Naciśnij coś żeby wyjść')
+        _ = input('\nObrazy .iso RBC nie wygenerowały się poprawnie. Naciśnij coś żeby wyjść')
         zamykanie_polaczenia(conn, channel)
         sys.exit()
 
-    print('Ok, kopiowanie zakończone.\n')
+    print('\nOk, kopiowanie zakończone.')
 
 
 def edcs_his_rbc(linia, etykieta_sys, etykieta):
@@ -666,17 +677,17 @@ def zapisywanie_edcs_his_rbc(channel, tgi, lista, nazwa):
     skan(channel, tgi, 'debersuxv045')
 
 def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
-    print('Odpalam skrypt mkDataPackHISRBC ...')
+    print('\nOdpalam skrypt mkDataPackHISRBC ...')
     channel.send('/cc/lci/estw_l90_5/estw/common/tool/scripts/mkDataPackHISRBC.sh -c poland\n'.encode())
     zwrot = skan_zwrot(channel, tgi, debers)
 
     if zwrot.count('Exit this script'):
-        _ = input('Coś nie tak ze skryptem mkDataPackHISRBC. Naciśnij coś żeby zobaczyć loga i wyjść')
+        _ = input('\nCoś nie tak ze skryptem mkDataPackHISRBC. Naciśnij coś żeby zobaczyć loga i wyjść')
         print(zwrot)
         zamykanie_polaczenia(conn, channel)
         sys.exit()
 
-    print('mkDataPackHISRBC ok.\n')
+    print('\nmkDataPackHISRBC ok.')
 
     channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
     skan(channel, tgi, debers)
@@ -691,7 +702,7 @@ def data_pack_his_rbc(conn, channel, tgi, debers, etykieta):
     skan(channel, tgi, debers)
 
 def mk_inst_cd(conn, channel, tgi, debers, etykieta):
-    print('Odpalam skrypt mkInstCD ...')
+    print('\nOdpalam skrypt mkInstCD ...')
     channel.send('cd /cc/his_rbc/his_rbc/icd_buildenv/\n'.encode())
     skan(channel, tgi, debers)
 
@@ -699,14 +710,14 @@ def mk_inst_cd(conn, channel, tgi, debers, etykieta):
     zwrot  = skan_zwrot(channel, tgi, debers)
 
     if not zwrot.count('SUCC: all done'):
-        _ = input('Coś poszło nie tak z robieniem obrazu his_rbc .iso. Naciśnij coś, żeby zobaczyć loga i wyjść')
+        _ = input('\nCoś poszło nie tak z robieniem obrazu his_rbc .iso. Naciśnij coś, żeby zobaczyć loga i wyjść')
         print(zwrot)
         zamykanie_polaczenia(conn, channel)
 
     print("mkInstCD OK.\n")
 
 def kopiowanie_his_rbc(conn, channel, tgi, debers, etykieta, haslo):
-    print("Kopiowanie obrazu his_rbc do tmp na debers00008 ...")
+    print("\nKopiowanie obrazu his_rbc do tmp na debers00008 ...")
     while True:
         channel.send(f'scp /cc/his_rbc/his_rbc/icd_buildenv/iso/{etykieta}.iso {tgi}@debers00008:/home/{tgi}/tmp/his_rbc/\n'.encode())
         zwrot = skan_zwrot(channel, tgi, debers, haslo=haslo)
@@ -720,29 +731,44 @@ def kopiowanie_his_rbc(conn, channel, tgi, debers, etykieta, haslo):
         else:
             break
 
-    print("Kopiowanie zakończone.\n")
+    print("\nKopiowanie zakończone.\n")
+
+
+def zawartosc_folderu(channel, tgi, debers, sciezka):
+    """"""
+    channel.send(f'cd {sciezka}\n'.encode())
+    skan(channel, tgi, debers)
+
+    channel.send('ls -l\n'.encode())
+    zwrot = skan_zwrot(channel, tgi, debers)
+    lista_tmp = zwrot.split('\r\n')[1:-1]
+
+    lista_data_elem = [x.split(' ')[-1] for x in lista_tmp]
+    print(lista_data_elem)
+    input("Czekam")
+    return lista_data_elem
 
 
 def import_obrazow_na_cc(conn, channel, tgi, etykieta, debers, linia):
     """Importa obrazow na cc."""
 
-    channel.send(f'cd /home/{tgi}/tmp/rbc/\n'.encode())
-    skan(channel, tgi, debers)
+    while True:
+        przedrostek_stacji = input('Wprowadź przedrostek linii do obrazów .iso (pl_<przedrostek>@): ')
+        potw = input(f'Wprowadzony przedrostek to: {przedrostek_stacji}, zgadza się? [T/N]')
+        if potw == 'T':
+            break
+        elif potw == 'N':
+            pass
+        else:
+            print("Błędny wybór pownno być T/N.")
 
-    prefix = 'pl_mmi@'
-    channel.send('ls -l\n'.encode())
-    zwrot = skan_zwrot(channel, tgi, debers)
-    lista_tmp = zwrot.split('\r\n')[1:-1]
+    prefix = f'pl_{przedrostek_stacji}@'
 
-    print(lista_tmp)
+    lista_data_elem = zawartosc_folderu(channel, tgi, debers, f'/home/{tgi}/tmp/rbc/')
 
-    lista_data_elem = [x.split(' ')[-1] for x in lista_tmp]
-
-    print(lista_data_elem)
-
+    #Zmiana nazw rbc .iso
     lista_iso = [x for x in lista_data_elem if not x.startswith('pl_') and (x.endswith('FCdump.iso') or x.endswith('OMS.iso') or x.endswith('RBCAUR.iso'))]
 
-    print(lista_iso)
     if len(lista_iso) != 3:
         _ = input('Brak obrazów w katalogu tmp/rbc. Naciśnij coś żeby wyjść.')
         zamykanie_polaczenia(conn, channel)
@@ -754,11 +780,26 @@ def import_obrazow_na_cc(conn, channel, tgi, etykieta, debers, linia):
         _ = skan_zwrot(channel, tgi, debers, ciag_znakow=".iso'?", potw=True)
         lista_prefix_iso.append(prefix+elem)
 
-    print(lista_prefix_iso)
+    #Zmiana nazwy his_rbc
+    lista_data_elem_his_rbc = zawartosc_folderu(channel, tgi, debers, f'/home/{tgi}/tmp/his_rbc/')
+
+    try:
+        elem_his_rbc_iso = [x for x in lista_data_elem_his_rbc if x.startswith('DATA') and x.endswith('.iso')][0]
+    except IndexError:
+        _ = input('W tmp brak obrazu his_rbc. Naciśnij coś żeby wyjść.')
+        zamykanie_polaczenia(conn, channel)
+        sys.exit()
+
+    zmieniona_nazwa_obrazu_his_rbc = prefix + 'his_rbc.iso'
+
+    channel.send(f'mv {elem_his_rbc_iso} {zmieniona_nazwa_obrazu_his_rbc}\n')
+    skan(channel, tgi, debers)
+
+    # Import rbc.iso
     channel.send(f'cd /cc/l905/customer/poland/{linia}/00_ctc/rbc/01/image\n'.encode())
     zwrot = skan_zwrot(channel, tgi, debers)
     if zwrot.count('No such file or directory'):
-        _ = input('Brak ścieżki /cc/l905/customer/poland/{linia}/00_ctc/rbc/01/image. Naciśnij coś żeby wyjść.')
+        _ = input(f'Brak ścieżki /cc/l905/customer/poland/{linia}/00_ctc/rbc/01/image. Naciśnij coś żeby wyjść.')
         sys.exit()
 
     for elem in lista_prefix_iso:
@@ -770,6 +811,10 @@ def import_obrazow_na_cc(conn, channel, tgi, etykieta, debers, linia):
         f'clearfsimport -nsetevent -recurse -preview -mklabel {etykieta} /home/{tgi}/tmp/rbc/DataProd.pdf .\n'.encode())
     skan(channel, tgi, debers)
 
+    #Import his_rbc.iso
+    channel.send(
+        f'clearfsimport -nsetevent -recurse -preview -mklabel {etykieta} /home/{tgi}/tmp/his_rbc/{zmieniona_nazwa_obrazu_his_rbc} .\n'.encode())
+    skan(channel, tgi, debers)
 
 
 
@@ -786,17 +831,24 @@ if __name__ == '__main__':
     lista_plikow_rbc = pliki_rbc(sciezka_main)
 
     linia_main = sciezka_main.split("/")[-1]
-    
-    login_main = input('\n\tPodaj login do produkcji obrazu rbc: ')
-    login_abbr = login_main.split('_')[0]
-    haslo_main = getpass.getpass(prompt='\tPodaj haslo: ')
+    while True:
+        login_main = input('\nPodaj login do produkcji obrazu rbc: ')
 
-    print("Łączenie z debers0008...")
+        if login_main.endswith('rbc'):
+            break
+        else:
+            _ = input("\nPodany login nie jest do konta rbc. Naciśnij coś i podaj jeszcze raz.")
+
+    login_abbr = login_main.split('_')[0]
+    haslo_main = getpass.getpass(prompt='Podaj haslo: ')
+
+    print("\nŁączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
-
-    print(f"Wrzucanie plików do katalogu home/{login_abbr}/project_data/poland ...")
     wrzucanie_plikow_do_cc(debers_08_conn, login_abbr, sciezka_main)
+
+    #Przechodzimy do katalogu /tmp i usuwamy obrazy .iso
+    usuwanie_obrazow(channel_debers_08, login_abbr, 'debers00008')
 
     # Przechodzimy do katalogu poland
     channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
@@ -813,16 +865,16 @@ if __name__ == '__main__':
     # Określamy i sprawdzamy etykietę
     etykieta_main = etykieta_cc()
 
-    print("Sprawdzam etykietę ..")
+    print("\nSprawdzam etykietę ..")
     while True:
         poprawne_etykieta = weryfikacja_etykiety(channel_debers_08, etykieta_main, login_abbr)
         if poprawne_etykieta:
             break
         else:
-            print(f'Etykieta {etykieta_main} istnieje podaj jeszcze raz')
+            print(f'\nEtykieta {etykieta_main} istnieje podaj jeszcze raz')
             etykieta_main = etykieta_cc()
 
-    print(f"Sprawdzam, czy jest ścieżka z katalogiem linii {linia_main}")
+    print(f"\nSprawdzam, czy jest ścieżka z katalogiem linii {linia_main}")
 
     # Określamy i spr katalog linii
     katalog_linii = linia_cc(linia_main)
@@ -832,32 +884,32 @@ if __name__ == '__main__':
         if poprawne:
             break
         else:
-            print(f'Podany katalog {katalog_linii} istnieje podaj jeszcze raz')
+            print(f'\nPodany katalog {katalog_linii} istnieje podaj jeszcze raz')
             etykieta_main = linia_cc(linia_main, przelacznik=False)
 
 
-    print("Preview importu plików ...")
+    print("\nPreview importu plików ...")
     zwrot_import_preview = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr,
                                                katalog_linii, etykieta_main, True)
 
     # TODO sprawdzenie, czy to w ogóle działa
-    print("Sprawdzanie nowych elementów ...")
+    print("\nSprawdzanie nowych elementów ...")
     sprawdzanie_import_preview(zwrot_import_preview, debers_08_conn, channel_debers_08)
 
-    print("Importowanie i etykietowanie ...")
+    print("\nImportowanie i etykietowanie ...")
     zwrot_import = import_danych_do_cc(channel_debers_08, 'debers00008', login_abbr, katalog_linii, etykieta_main, False)
 
     ustawienie_oryginalnego_edcs(channel_debers_08, login_abbr, 'debers00008')
 
-    print("Zamykanie połączenia do debers00008 ...\n")
+    print("\nZamykanie połączenia do debers00008 ...\n")
     zamykanie_polaczenia(debers_08_conn, channel_debers_08)
 
 
 
     # Polaczenie do rbc prod
-    print("Łączenie z hostem do produkcji obrazu RBC...")
+    print("\nŁączenie z hostem do produkcji obrazu RBC...")
     rbc_prod_conn, channel_rbc = nawiazanie_polaczenia(rbc_prod, login_main, haslo_main)
-    print(f"Ok, połączono z hostem do produkcji obrazu RBC.")
+    print(f"\nOk, połączono z hostem do produkcji obrazu RBC.")
 
     # Tworzymy katalog, jeśli już jest pytamy jeszcze raz
     katalog_rbc = katalog_roboczy(channel_rbc)
@@ -873,14 +925,14 @@ if __name__ == '__main__':
 
     kopiowanie_data_prod_pdf(rbc_prod_conn, channel_rbc, login_abbr, haslo_main)
 
-    print("Zamykanie połączenia z hostem do produkcji obrazu RBC.\n")
+    print("\nZamykanie połączenia z hostem do produkcji obrazu RBC.\n")
     zamykanie_polaczenia(rbc_prod_conn, channel_rbc)
 
 
     print("\nŁączenie z hostem debersuxvl03...")
     debersuxvl03_conn, debersuxvl03_channel = nawiazanie_polaczenia(debersuxvl03,
                                                                     login_main, haslo_main, debers='debersuxvl03')
-    print(f"Ok, połączono z debersuxvl03.")
+    print(f"\nOk, połączono z debersuxvl03.")
 
     folder_obraz_rbc = create_cd(debersuxvl03_conn, debersuxvl03_channel, login_main, haslo_main, 'debersuxvl03')
 
@@ -888,7 +940,7 @@ if __name__ == '__main__':
 
     zamykanie_polaczenia(debersuxvl03_conn, debersuxvl03_channel)
 
-    print("Zamykanie połączenia z hostem debersuxvl03.\n")
+    print("\nZamykanie połączenia z hostem debersuxvl03.")
 
 
     print("\nŁączenie z hostem debersuxv045...")
@@ -917,15 +969,15 @@ if __name__ == '__main__':
 
     kopiowanie_his_rbc(debers045_conn, debers045_channel, login_abbr, 'debersuxv045', etykieta_main, haslo_main)
 
-    print("Zamykam połączenie do debersuxv045...\n")
+    print("\nZamykam połączenie do debersuxv045...")
     zamykanie_polaczenia(debers045_conn, debers045_channel)
 
-    print("Łączenie z debers0008...")
+    print("\nŁączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
     import_obrazow_na_cc(debers_08_conn, channel_debers_08, login_abbr, etykieta_main, 'debers00008', linia_main)
 
-    print(f'Wszystkie nowo utworzone obrazy znajdują się w katalogu /home/{login_abbr}/tmp na debers00008.')
+    print(f'\nWszystkie nowo utworzone obrazy znajdują się w katalogu /home/{login_abbr}/tmp na debers00008.')
 
     print('\n\n\tFIN.\n')
 
