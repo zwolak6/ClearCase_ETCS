@@ -335,6 +335,9 @@ def init_prod_repo(rbc_prod_conn_init, channel, tgi, katalog_init):
     skan(channel)
     channel.send(f"cd /cc/rbc/Production/bin\n".encode())
     skan(channel)
+
+
+
     print("\nOdpalam initProdRepo...")
     channel.send(f"initProdRepo -setview -cae {katalog_init} -src /home/{tgi}/{katalog_init} PKP.1.3.2.0 02\n".encode())
     zwrot = skan_zwrot(channel)
@@ -513,6 +516,10 @@ def sprawdzanie_import_preview(zwrot : str, conn, channel):
 
 def czyt_istniejacego_edcs(channel, tgi, debers):
     """Czytamy isniejące rov dla potomności"""
+
+    channel.send('cd /cc/l905/customer/poland\n'.encode())
+    skan(channel, login_abbr, 'debers00008')
+
     channel.send('ct catcs\n')
     zwrot = skan_zwrot(channel, tgi, debers)
 
@@ -850,18 +857,13 @@ if __name__ == '__main__':
     #Przechodzimy do katalogu /tmp i usuwamy obrazy .iso
     usuwanie_obrazow(channel_debers_08, login_abbr, 'debers00008')
 
-    # Przechodzimy do katalogu poland
-    channel_debers_08.send('cd /cc/l905/customer/poland\n'.encode())
-    skan(channel_debers_08, login_abbr, 'debers00008')
-
-
+    # Czytamy istniejący edcs
     lista_istniejaca_edcs = czyt_istniejacego_edcs(channel_debers_08, login_abbr, 'debers00008')
-
     zapisywanie_istniejacego_edcs(debers_08_conn, login_abbr, lista_istniejaca_edcs)
 
+    # Ustawiamy edcs do importu
     ustawianie_edcs_do_importu(channel_debers_08, login_abbr, 'debers00008')
 
-    
     # Określamy i sprawdzamy etykietę
     etykieta_main = etykieta_cc()
 
@@ -942,10 +944,8 @@ if __name__ == '__main__':
 
     print("\nZamykanie połączenia z hostem debersuxvl03.")
 
-
     print("\nŁączenie z hostem debersuxv045...")
     debers045_conn, debers045_channel = nawiazanie_polaczenia(debersuxv045, login_abbr, haslo_main, 'debersuxv045')
-
 
 
     etykieta_systemowa = 'ETCS_RC_1.2_PL2.3.0.2'
@@ -975,7 +975,15 @@ if __name__ == '__main__':
     print("\nŁączenie z debers0008...")
     debers_08_conn, channel_debers_08 = nawiazanie_polaczenia(debers00008, login_abbr, haslo_main)
 
+    lista_istniejaca_edcs = czyt_istniejacego_edcs(channel_debers_08, login_abbr, 'debers00008')
+
+    zapisywanie_istniejacego_edcs(debers_08_conn, login_abbr, lista_istniejaca_edcs)
+
+    ustawianie_edcs_do_importu(channel_debers_08, login_abbr, 'debers00008')
+
     import_obrazow_na_cc(debers_08_conn, channel_debers_08, login_abbr, etykieta_main, 'debers00008', linia_main)
+
+    ustawienie_oryginalnego_edcs(channel_debers_08, login_abbr, 'debers00008')
 
     print(f'\nWszystkie nowo utworzone obrazy znajdują się w katalogu /home/{login_abbr}/tmp na debers00008.')
 
