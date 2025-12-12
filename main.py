@@ -139,7 +139,7 @@ def usuwanie_obrazow(channel, tgi, debers):
     for folder in ['rbc', 'his_rbc']:
         channel.send(f'cd /home/{tgi}/tmp/{folder}/\n'.encode())
         skan(channel, tgi, debers)
-        channel.send(f'rm -f *.iso\n'.encode())
+        channel.send(f'/usr/bin/rm -f *.iso\n'.encode())
         skan_zwrot(channel, tgi, debers, ciag_znakow='(yes/no)?', potw=True)
 
 def wrzucanie_plikow(conn, tgi, lista, katalog_, sciezka):
